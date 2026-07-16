@@ -19,9 +19,23 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.metrics import roc_auc_score
+from torch.utils.data import Dataset
 
 from .. import models
 from .base import Attack, AttackContext, AttackResult
+
+
+def _retention_from_losses(member_loss: np.ndarray, nonmember_loss: np.ndarray) -> tuple[float, float]:
+    """Membership-advantage retention in [0,1] plus the raw AUC.
+
+    label 1 = member (forget-set), 0 = non-member; score = -loss (low loss -> member).
+    retention = clip(2*(AUC-0.5), 0, 1): 0 = indistinguishable (good forgetting).
+    """
+    labels = np.concatenate([np.ones_like(member_loss), np.zeros_like(nonmember_loss)])
+    scores = -np.concatenate([member_loss, nonmember_loss])
+    auc = float(roc_auc_score(labels, scores))
+    retention = float(np.clip(2.0 * (auc - 0.5), 0.0, 1.0))
+    return retention, auc
 
 
 class LossMIA(Attack):
@@ -34,12 +48,7 @@ class LossMIA(Attack):
         nonmember_loss = models.per_sample_loss(
             ctx.target_model, ctx.nonmember_data, batch_size=ctx.batch_size, device=ctx.device
         ).numpy()
-
-        # label 1 = member (forget-set), 0 = non-member; score = -loss (low loss -> member)
-        labels = np.concatenate([np.ones_like(member_loss), np.zeros_like(nonmember_loss)])
-        scores = -np.concatenate([member_loss, nonmember_loss])
-        auc = float(roc_auc_score(labels, scores))
-        retention = float(np.clip(2.0 * (auc - 0.5), 0.0, 1.0))
+        retention, auc = _retention_from_losses(member_loss, nonmember_loss)
 
         return AttackResult(
             name=self.name,
@@ -52,3 +61,22 @@ class LossMIA(Attack):
                 "n_nonmember": int(nonmember_loss.size),
             },
         )
+
+
+def bootstrap_gold_null(gold_model, member_data: Dataset, nonmember_data: Dataset, *,
+                        device, batch_size: int, n_boot: int, seed: int = 0) -> list[float]:
+    """Null distribution of the loss-MIA retention score under 'truly forgotten'.
+
+    Uses the gold retrain (which never saw the forget-set) and resamples member/non-member
+    losses with replacement. This captures SAMPLING variance only — not model/seed variance
+    — so the resulting FAR is optimistic (a lower bound). See PLAN.md calibration caveat.
+    """
+    m = models.per_sample_loss(gold_model, member_data, batch_size=batch_size, device=device).numpy()
+    nz = models.per_sample_loss(gold_model, nonmember_data, batch_size=batch_size, device=device).numpy()
+    rng = np.random.default_rng(seed)
+    null = []
+    for _ in range(n_boot):
+        mb = m[rng.integers(0, len(m), len(m))]
+        nb = nz[rng.integers(0, len(nz), len(nz))]
+        null.append(_retention_from_losses(mb, nb)[0])
+    return null

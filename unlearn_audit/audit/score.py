@@ -11,7 +11,7 @@ The calibration seam decides whether that retention is *significant*; v0 leaves 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Optional, Sequence
 
 from ..attacks.base import AttackResult
 from .calibration import CalibrationResult, Calibrator
@@ -24,6 +24,7 @@ class AuditReport:
     attacks: Sequence[AttackResult]
     calibration: CalibrationResult
     aggregate: str
+    retention_detected: Optional[bool] = None   # calibrated decision (None if uncalibrated)
     per_attack: dict = field(default_factory=dict)
 
 
@@ -39,14 +40,16 @@ def aggregate_retention(results: Sequence[AttackResult], method: str = "max") ->
 
 
 def audit(results: Sequence[AttackResult], *, aggregate: str = "max",
-          target_far: float = 0.05) -> AuditReport:
+          target_far: float = 0.05, null_scores: Optional[Sequence[float]] = None) -> AuditReport:
     retention = aggregate_retention(results, aggregate)
-    calib = Calibrator(target_far=target_far).calibrate(retention, null_scores=None)
+    calib = Calibrator(target_far=target_far).calibrate(retention, null_scores=null_scores)
+    detected = (retention >= calib.threshold) if calib.calibrated else None
     return AuditReport(
         retention_score=retention,
         forgetting_score=1.0 - retention,
         attacks=list(results),
         calibration=calib,
         aggregate=aggregate,
+        retention_detected=detected,
         per_attack={r.name: r.retention_score for r in results},
     )

@@ -6,10 +6,12 @@ from __future__ import annotations
 
 from .base import Unlearner, UnlearnContext
 from .gradient_ascent import GradientAscentUnlearner
+from .guardrail import GuardrailUnlearner
 from .retrain import RetrainUnlearner
 
 _REGISTRY: dict[str, type[Unlearner]] = {
     "gradient_ascent": GradientAscentUnlearner,
+    "guardrail": GuardrailUnlearner,
     "retrain": RetrainUnlearner,
 }
 

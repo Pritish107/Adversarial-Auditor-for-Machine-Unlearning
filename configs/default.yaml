@@ -1,40 +1,46 @@
-# v0 default config. Everything is deliberately TINY so the full pipeline runs in
-# seconds-to-minutes on CPU or a small GPU. Bump the numbers (or point `dataset.name`
-# at cifar10) to get a stronger signal.
+# v0 default config. CIFAR-10 with a natural train/test gap so loss-MIA has real signal.
+# Bump epochs if the gap (and thus the baseline/guardrail MIA-AUC) comes out too small.
 
 seed: 0
 device: auto            # auto | cpu | cuda
 
 dataset:
-  name: mnist           # config knob: mnist (default) | cifar10 (Milestone-later)
+  name: cifar10         # config knob: cifar10 (default) | mnist (fast smoke only)
   root: ./data
-  num_train: 4000       # size of the training pool (retain + forget)
-  num_test: 2000        # held-out non-members (used by MIA as the negative class)
-  forget_size: 500      # how many training samples are designated "to forget"
+  num_train: 5000       # training pool (retain + forget); modest -> natural overfit gap
+  num_test: 2000        # held-out non-members (MIA negative class)
+  forget_size: 500      # designated "to forget" (MIA members)
   batch_size: 128
 
 model:
   arch: small_cnn
 
-train:                  # baseline training on the full pool (retain + forget)
-  epochs: 3
+train:                  # baseline training on the full pool
+  epochs: 30
   lr: 0.001
 
-unlearn:
-  method: gradient_ascent
+methods:                # unlearning methods to audit — one labeled case each
+  - gradient_ascent     #   honest but crude (should land between gold and guardrail)
+  - guardrail           #   fake output filter, weights intact (should be caught)
+
+unlearn:                # per-method hyperparameters
   gradient_ascent:
-    epochs: 3
+    epochs: 2           # crude on purpose; just not enough to fully collapse utility
     lr: 0.0005
-    retain_reg: true    # interleave descent on retain to preserve utility (honest baseline)
+    retain_reg: true
+  guardrail: {}         # no hyperparameters — wraps the frozen baseline
 
-gold:                   # gold reference = retrain on retain-only (ideal forgetting)
+gold:                   # gold reference = retrain on retain-only (ideal forgetting + null source)
   enabled: true
-  epochs: 3
+  epochs: 30
   lr: 0.001
+
+calibration:
+  n_boot: 200           # bootstrap resamples off the gold model for the null distribution
+  target_far: 0.05      # desired false-alarm rate
 
 attacks:
   - loss_mia            # registry keys; add more here as we implement them
 
 audit:
   aggregate: max        # model fails if ANY attack recovers info -> aggregate = max
-  target_far: 0.05      # desired false-alarm rate (consumed by the calibration seam)

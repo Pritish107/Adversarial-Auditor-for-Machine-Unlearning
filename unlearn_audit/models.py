@@ -61,14 +61,22 @@ class EvalResult:
 @torch.no_grad()
 def evaluate(model: nn.Module, dataset: Dataset, *, batch_size: int,
              device: torch.device) -> EvalResult:
+    """Accuracy comes from the *predict* path, loss from the raw *forward* logits.
+
+    Splitting the two is what lets an output-filter guardrail collapse accuracy (via an
+    overridden `predict`) while leaving the loss/logit trace the auditor reads untouched.
+    For ordinary models `predict` defaults to argmax(forward), so nothing changes.
+    """
     model.to(device).eval()
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     total, correct, loss_sum = 0, 0, 0.0
+    has_predict = hasattr(model, "predict")
     for x, y in loader:
         x, y = x.to(device), y.to(device)
-        logits = model(x)
+        logits = model(x)                                   # raw scoring path
         loss_sum += F.cross_entropy(logits, y, reduction="sum").item()
-        correct += (logits.argmax(1) == y).sum().item()
+        preds = model.predict(x) if has_predict else logits.argmax(1)
+        correct += (preds == y).sum().item()
         total += y.numel()
     return EvalResult(accuracy=correct / total, loss=loss_sum / total)
 

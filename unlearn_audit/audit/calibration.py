@@ -1,21 +1,26 @@
-"""Calibration seam — STUB for v0.
+"""Calibration: turn a raw retention score into a decision with a false-alarm rate.
 
-The real job (Milestone 3+): turn a raw retention score into a *calibrated* decision with
-a stated false-alarm rate. The intended method:
+Method (first-cut, v0):
+  1. Build a NULL distribution of retention scores from a case known to have truly
+     forgotten — the gold retrain — by bootstrapping its member/non-member losses.
+  2. Threshold = the (1 - target_far) quantile of that null.
+  3. FAR = fraction of the null at or above the threshold.
+  4. Decision for a query score = score >= threshold.
 
-  1. Build a NULL distribution of retention scores on cases known to have truly forgotten
-     (e.g. the gold retrain reference, and other clean-forgetting controls).
-  2. Pick the decision threshold as the (1 - target_far) quantile of that null.
-  3. Report the forgetting score together with the empirical FAR at that threshold.
+CAVEAT (see PLAN.md): bootstrapping ONE gold model captures sampling variance but NOT
+model/seed variance, so this FAR is optimistic — a lower bound on the true false-alarm
+rate. The honest version uses multiple gold retrains at different seeds; that is M3 work.
+The v0 number is labeled first-cut accordingly.
 
-v0 deliberately does NOT implement this. It returns an *uncalibrated* result with a naive
-threshold and far=None, but through the exact interface the real calibrator will use — so
-wiring it in later is a drop-in, not a refactor. This is the clean seam PROJECT.md asks for.
+If no null is supplied we fall back to an explicit uncalibrated stub (far=None) rather than
+silently pretending to be calibrated.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Sequence
+
+import numpy as np
 
 
 @dataclass
@@ -35,21 +40,20 @@ class Calibrator:
         retention_score: float,
         null_scores: Optional[Sequence[float]] = None,
     ) -> CalibrationResult:
-        """Return a decision threshold + FAR for `retention_score`.
-
-        Real path (null_scores given) is not implemented in v0 — we assert the seam is
-        reachable and fall through to the uncalibrated stub, so nothing silently pretends
-        to be calibrated.
-        """
-        if null_scores is not None:
-            # TODO(Milestone 3): threshold = quantile(null_scores, 1 - target_far);
-            #                    far = empirical exceedance of null above threshold.
-            raise NotImplementedError(
-                "Real calibration from a null distribution lands in Milestone 3."
+        if null_scores is None or len(null_scores) == 0:
+            return CalibrationResult(
+                calibrated=False,
+                threshold=0.5,           # naive placeholder on the [0,1] retention scale
+                false_alarm_rate=None,
+                note="uncalibrated - no null distribution supplied; threshold is a placeholder",
             )
+        null = np.asarray(null_scores, dtype=float)
+        threshold = float(np.quantile(null, 1.0 - self.target_far))
+        far = float(np.mean(null >= threshold))
         return CalibrationResult(
-            calibrated=False,
-            threshold=0.5,               # naive placeholder on the [0,1] retention scale
-            false_alarm_rate=None,
-            note="uncalibrated stub - no null distribution; threshold is a placeholder",
+            calibrated=True,
+            threshold=threshold,
+            false_alarm_rate=far,
+            note=(f"first-cut: bootstrap over ONE gold model (n={null.size}); sampling "
+                  f"variance only, not seed variance -> FAR is a lower bound"),
         )

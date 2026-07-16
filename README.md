@@ -7,15 +7,24 @@
 
 ## Status: v0 (image-classifier prototype)
 
-The v0 "hello world" runs the full auditor loop on a small CNN:
+The v0 auditor runs the full loop on a small CNN (CIFAR-10 by default):
 
 ```
-train baseline  ->  unlearn (honest baseline)  ->  ONE membership-inference attack  ->  forgetting score  ->  report
+train baseline  ->  {unlearning methods}  ->  membership-inference attack  ->  calibrated forgetting score  ->  report
 ```
 
-with a gold retrain-from-scratch model as the "truly forgotten" reference and a clean
-**calibration seam** stubbed for later. LLM/TOFU is Milestone 2 — the interfaces here are
-designed to carry over unchanged.
+It audits three ground-truth-labeled cases against a gold retrain-from-scratch reference,
+with a **real (first-cut) calibration**: the gold model is bootstrapped into a null
+distribution, giving a decision threshold at a target false-alarm rate.
+
+**Headline result (CIFAR-10, seed 0):** a *guardrail* fake-unlearner (frozen weights + an
+output filter) shows **forget-accuracy 0.000** — a naive eval calls it perfectly forgotten —
+yet the auditor reads **MIA-AUC 0.731, identical to the un-unlearned baseline**, and flags
+full residual retention. Gold sits at chance (AUC 0.506); crude gradient-ascent lands in
+between (0.648). See [PLAN.md](PLAN.md) for the full table and the two honest caveats
+(threat-model boundary; FAR is a lower bound).
+
+LLM/TOFU is Milestone 2 — the interfaces here are designed to carry over unchanged.
 
 ## Setup
 
@@ -33,8 +42,9 @@ py -3.11 -m venv .venv
 .venv/Scripts/python.exe -m unlearn_audit.cli --config configs/default.yaml
 ```
 
-Everything in `configs/default.yaml` is tiny by default (seconds-to-minutes). Dataset,
-sizes, and the forget-set are config knobs — e.g. `--dataset cifar10` for a stronger signal.
+`configs/default.yaml` is CIFAR-10 (first run downloads ~170MB). Sizes, epochs, the
+forget-set, the method list, and calibration are all config knobs — e.g. `--dataset mnist`
+for a fast, weaker-signal run.
 
 ## Tests
 

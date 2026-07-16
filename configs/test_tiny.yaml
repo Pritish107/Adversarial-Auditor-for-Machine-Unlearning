@@ -1,4 +1,5 @@
-# Ultra-tiny config for smoke tests: a handful of samples, 1 epoch, CPU. Runs in seconds.
+# Ultra-tiny config for smoke tests: MNIST, a handful of samples, 1 epoch, CPU. Seconds.
+# Exercises the full multi-method + calibration path without any big download.
 seed: 0
 device: cpu
 
@@ -17,19 +18,28 @@ train:
   epochs: 1
   lr: 0.001
 
+methods:
+  - gradient_ascent
+  - guardrail
+
 unlearn:
-  method: gradient_ascent
   gradient_ascent:
     epochs: 1
     lr: 0.0005
     retain_reg: true
+  guardrail: {}
 
 gold:
-  enabled: false          # skip the extra retrain in smoke tests for speed
+  enabled: true
+  epochs: 1
+  lr: 0.001
+
+calibration:
+  n_boot: 20
+  target_far: 0.05
 
 attacks:
   - loss_mia
 
 audit:
   aggregate: max
-  target_far: 0.05
