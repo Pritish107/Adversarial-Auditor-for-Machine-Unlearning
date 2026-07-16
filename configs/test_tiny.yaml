@@ -1,0 +1,35 @@
+# Ultra-tiny config for smoke tests: a handful of samples, 1 epoch, CPU. Runs in seconds.
+seed: 0
+device: cpu
+
+dataset:
+  name: mnist
+  root: ./data
+  num_train: 200
+  num_test: 100
+  forget_size: 40
+  batch_size: 64
+
+model:
+  arch: small_cnn
+
+train:
+  epochs: 1
+  lr: 0.001
+
+unlearn:
+  method: gradient_ascent
+  gradient_ascent:
+    epochs: 1
+    lr: 0.0005
+    retain_reg: true
+
+gold:
+  enabled: false          # skip the extra retrain in smoke tests for speed
+
+attacks:
+  - loss_mia
+
+audit:
+  aggregate: max
+  target_far: 0.05

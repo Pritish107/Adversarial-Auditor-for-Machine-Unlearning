@@ -1,0 +1,14 @@
+# Pinned to what actually installed in .venv this session (Python 3.11, Windows).
+# torch/torchvision are the CUDA cu124 builds — install them from the PyTorch index FIRST:
+#
+#   pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+#   pip install -r requirements.txt
+#
+# CPU-only alternative: pip install torch==2.6.0 torchvision==0.21.0  (from PyPI, no +cu124)
+
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+numpy==2.4.4
+scikit-learn==1.9.0
+pyyaml==6.0.3
+pytest==9.1.1

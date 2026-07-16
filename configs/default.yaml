@@ -1,0 +1,40 @@
+# v0 default config. Everything is deliberately TINY so the full pipeline runs in
+# seconds-to-minutes on CPU or a small GPU. Bump the numbers (or point `dataset.name`
+# at cifar10) to get a stronger signal.
+
+seed: 0
+device: auto            # auto | cpu | cuda
+
+dataset:
+  name: mnist           # config knob: mnist (default) | cifar10 (Milestone-later)
+  root: ./data
+  num_train: 4000       # size of the training pool (retain + forget)
+  num_test: 2000        # held-out non-members (used by MIA as the negative class)
+  forget_size: 500      # how many training samples are designated "to forget"
+  batch_size: 128
+
+model:
+  arch: small_cnn
+
+train:                  # baseline training on the full pool (retain + forget)
+  epochs: 3
+  lr: 0.001
+
+unlearn:
+  method: gradient_ascent
+  gradient_ascent:
+    epochs: 3
+    lr: 0.0005
+    retain_reg: true    # interleave descent on retain to preserve utility (honest baseline)
+
+gold:                   # gold reference = retrain on retain-only (ideal forgetting)
+  enabled: true
+  epochs: 3
+  lr: 0.001
+
+attacks:
+  - loss_mia            # registry keys; add more here as we implement them
+
+audit:
+  aggregate: max        # model fails if ANY attack recovers info -> aggregate = max
+  target_far: 0.05      # desired false-alarm rate (consumed by the calibration seam)

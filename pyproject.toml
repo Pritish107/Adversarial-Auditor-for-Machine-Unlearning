@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unlearn-audit"
+version = "0.0.1"
+description = "An adversarial auditor for machine unlearning — tries to disprove forgetting and outputs a calibrated forgetting score."
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torchvision",
+    "numpy",
+    "scikit-learn",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["unlearn_audit", "unlearn_audit.unlearn", "unlearn_audit.attacks", "unlearn_audit.audit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
