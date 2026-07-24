@@ -25,7 +25,20 @@ clean calibration seam. Prototype = small CNN on MNIST (CIFAR-10 is a config kno
 - [x] Run full pipeline; confirm it runs end-to-end; first commit (f9bd9a6)
 - [x] Sanity-check: MNIST MIA signal was ~chance (AUC 0.507) -> switched default to CIFAR-10
 
-### M1 — v0 hardening / labeled eval seeds  ← plumbing DONE
+## ★ v0 HEADLINE RESULT (for the paper — pull straight from here)
+
+**guardrail−gold MIA-AUC gap = 0.220 ± 0.030 (N=5 seeds), gold 0/5 false positives,
+ordering (gold < gradient_ascent < guardrail) preserved 5/5.**
+CIFAR-10, small CNN, loss-MIA. Per-seed gap: [0.225, 0.171, 0.225, 0.225, 0.254].
+Seed-aware calibration: pooled null of 5 independent gold retrains, threshold 0.074, FAR 0.050.
+Interpretation: a guardrail fake-unlearner with forget-accuracy ~0.01 (naive eval calls it
+forgotten) is caught with MIA-AUC identical to the un-unlearned baseline, while the truly-
+forgotten gold sits at chance (AUC 0.498 ± 0.024). This is the "auditor catches retention
+that standard evals declare forgotten" claim, with error bars.
+
+---
+
+### M1 — v0 hardening / labeled eval seeds  ← DONE
 - [x] Switched default to CIFAR-10 for a natural train/test gap (real loss-MIA signal)
 - [x] Three ground-truth-labeled cases: gold (truly forgotten) / gradient_ascent (crude) /
       guardrail (fake output filter, weights intact) + baseline control
@@ -39,8 +52,10 @@ clean calibration seam. Prototype = small CNN on MNIST (CIFAR-10 is a config kno
       Headline: guardrail forget-ACC=0.000 (naive eval: "perfectly forgotten") but MIA-AUC
       equals the un-unlearned baseline -> auditor catches 100% residual retention.
       Calibration: threshold=0.066, FAR=0.050 (target met). Baseline train/test gap ~43pt.
-- [ ] Detection AUC harness (clean vs. tampered) across more cases
-- [ ] Multi-seed gold null (removes the calibration caveat below)
+- [x] MULTI-SEED (N=5) hardening — see ★ headline above. Per-case mean±std, gap distribution,
+      ranking stability (5/5), and seed-aware pooled-null calibration all via
+      `python -m unlearn_audit.multiseed`. Ordering robust; gap tight; separation perfect.
+- [ ] Detection AUC harness (clean vs. tampered) across more cases — deferred to post-v0
 
 ### M2 — LLM / TOFU  (the architecture-preservation test)
 - [ ] Add TOFU behind the SAME data abstraction (verify current HF name/config vs. installed
@@ -88,12 +103,19 @@ for the audit being a **battery, not one attack**: M3's activation-probing and r
 probes read signals a logit-corrupting filter cannot cheaply fake. State this boundary
 explicitly in the paper next to the guardrail result — it is the first reviewer question.
 
-### C2 — Calibration FAR is a lower bound (optimistic)
-The v0 null is bootstrapped from **one** gold retrain, so it captures member/non-member
-**sampling** variance but **not model/seed** variance. Real truly-forgotten models vary
-run-to-run; ignoring that makes the reported FAR **optimistically low — a lower bound** on
-the true false-alarm rate. Honest version = multiple gold retrains at different seeds pooled
-into the null. v0 FAR is labeled "first-cut" in the report accordingly.
+### C2 — Calibration is seed-aware now, but the FAR tail is still limited by N
+Status: **seed-aware (pools N independent gold retrains); FAR tail still limited by N=5
+true draws.** The multi-seed harness pools the gold models from all N seeds — each a genuinely
+independent retrain (different init AND different forget-set draw) — into one null, so the null
+now captures **model/seed variance**, not just sampling variance. That is a real improvement,
+**not a fix**: the tail quantile at FAR=0.05 still rests on only **N=5 truly-independent draws**,
+each contributing 200 *correlated* bootstrap resamples. So n=1000 null points is **not** 1000
+independent observations — the effective independent sample size for the tail is ~5. The FAR
+is far better grounded than the single-gold v0 number, but the 5th-percentile tail is still
+coarse; more independent gold seeds (not more bootstrap resamples) are what tighten it.
+
+Earlier single-gold state (superseded, kept for context): bootstrapping ONE gold captured
+sampling variance only, making the FAR an optimistic lower bound.
 
 ## Open questions
 

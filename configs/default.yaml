@@ -44,3 +44,6 @@ attacks:
 
 audit:
   aggregate: max        # model fails if ANY attack recovers info -> aggregate = max
+
+multiseed:              # used by `python -m unlearn_audit.multiseed`
+  seeds: [0, 1, 2, 3, 4]

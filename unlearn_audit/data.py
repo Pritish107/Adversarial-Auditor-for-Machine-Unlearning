@@ -14,11 +14,24 @@ so nothing downstream has to change.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 from dataclasses import dataclass
 
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import datasets, transforms
+
+
+@contextlib.contextmanager
+def _silent():
+    """Suppress torchvision's download progress bar (it floods stdout on first fetch).
+
+    Only prints are redirected; download failures still raise exceptions normally, so this
+    hides the progress chatter without swallowing real errors.
+    """
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        yield
 
 
 @dataclass
@@ -56,8 +69,9 @@ def build_data(cfg: dict, seed: int) -> DataBundle:
         transforms.ToTensor(),
         transforms.Normalize(spec["mean"], spec["std"]),
     ])
-    train_full = spec["cls"](cfg["root"], train=True, download=True, transform=tfm)
-    test_full = spec["cls"](cfg["root"], train=False, download=True, transform=tfm)
+    with _silent():
+        train_full = spec["cls"](cfg["root"], train=True, download=True, transform=tfm)
+        test_full = spec["cls"](cfg["root"], train=False, download=True, transform=tfm)
 
     g = torch.Generator().manual_seed(seed)
 
