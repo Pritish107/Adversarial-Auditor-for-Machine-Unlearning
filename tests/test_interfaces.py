@@ -12,7 +12,7 @@ from torch.utils.data import TensorDataset
 from unlearn_audit.attacks import available_attacks, build_attack
 from unlearn_audit.attacks.base import Attack, AttackContext, AttackResult
 from unlearn_audit.audit.score import aggregate_retention, audit
-from unlearn_audit.models import SmallCNN
+from unlearn_audit.models import SmallCNN, per_sample_loss
 
 
 def _fake_ctx(separable: bool) -> AttackContext:
@@ -37,6 +37,7 @@ def _fake_ctx(separable: bool) -> AttackContext:
         retain_data=TensorDataset(x_non, y_non),
         device=torch.device("cpu"),
         batch_size=16,
+        scorer=per_sample_loss,
     )
 
 

@@ -58,6 +58,7 @@ def _attack_results(model, data, cfg, device, reference=None):
         ctx = AttackContext(
             target_model=model, member_data=data.forget, nonmember_data=data.test,
             retain_data=data.retain, device=device, batch_size=cfg["dataset"]["batch_size"],
+            scorer=models.per_sample_loss,          # classifier scorer: per-sample cross-entropy
             reference_model=reference, retrain_fn=None, params={})
         results.append(build_attack(key).run(ctx))
     return results
@@ -103,8 +104,8 @@ def run_seed(cfg: dict, seed: int) -> SeedResult:
     baseline = _build_baseline(cfg, data, device)
     gold = _build_gold(cfg, baseline, data, device)
     gold_null = bootstrap_gold_null(
-        gold, data.forget, data.test, device=device, batch_size=cfg["dataset"]["batch_size"],
-        n_boot=cfg["calibration"]["n_boot"], seed=seed)
+        gold, data.forget, data.test, scorer=models.per_sample_loss, device=device,
+        batch_size=cfg["dataset"]["batch_size"], n_boot=cfg["calibration"]["n_boot"], seed=seed)
 
     cases = {"baseline (pre-unlearn)": _case_metrics(baseline, data, cfg, device)}
     for method in cfg["methods"]:
@@ -139,8 +140,8 @@ def run(cfg: dict) -> tuple[str, list[report.ModelSummary]]:
     baseline = _build_baseline(cfg, data, device)
     gold = _build_gold(cfg, baseline, data, device)
     null_scores = bootstrap_gold_null(
-        gold, data.forget, data.test, device=device, batch_size=cfg["dataset"]["batch_size"],
-        n_boot=cfg["calibration"]["n_boot"], seed=cfg["seed"])
+        gold, data.forget, data.test, scorer=models.per_sample_loss, device=device,
+        batch_size=cfg["dataset"]["batch_size"], n_boot=cfg["calibration"]["n_boot"], seed=cfg["seed"])
 
     summaries = [_summarize("baseline (pre-unlearn)", baseline, data, cfg, device, null_scores)]
     for method in cfg["methods"]:

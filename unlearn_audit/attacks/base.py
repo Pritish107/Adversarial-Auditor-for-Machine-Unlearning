@@ -27,11 +27,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+
+# A per-example membership scorer: (model, dataset, *, device, batch_size) -> array-like of
+# per-example loss, LOWER = more member-like. This is the ONE modality-specific thing the
+# loss-MIA needs; injecting it (rather than hardcoding classification cross-entropy) is what
+# lets a single auditor run on both classifiers and LLMs. Required — never defaulted to a
+# modality, so no hidden classification assumption survives. Mirrors `retrain_fn` injection.
+MembershipScorer = Callable[..., Any]
 
 
 @dataclass
@@ -42,6 +49,7 @@ class AttackContext:
     retain_data: Dataset                     # kept training data (some attacks want it)
     device: torch.device
     batch_size: int
+    scorer: MembershipScorer                 # REQUIRED: per-example loss fn (see above)
     reference_model: Optional[nn.Module] = None
     retrain_fn: Optional[Callable] = None    # (model, dataset, steps) -> model, for relearning-speed
     params: dict = field(default_factory=dict)

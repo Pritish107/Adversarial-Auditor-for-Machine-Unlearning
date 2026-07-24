@@ -21,8 +21,7 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 from torch.utils.data import Dataset
 
-from .. import models
-from .base import Attack, AttackContext, AttackResult
+from .base import Attack, AttackContext, AttackResult, MembershipScorer
 
 
 def _retention_from_losses(member_loss: np.ndarray, nonmember_loss: np.ndarray) -> tuple[float, float]:
@@ -42,12 +41,10 @@ class LossMIA(Attack):
     name = "loss_mia"
 
     def run(self, ctx: AttackContext) -> AttackResult:
-        member_loss = models.per_sample_loss(
-            ctx.target_model, ctx.member_data, batch_size=ctx.batch_size, device=ctx.device
-        ).numpy()
-        nonmember_loss = models.per_sample_loss(
-            ctx.target_model, ctx.nonmember_data, batch_size=ctx.batch_size, device=ctx.device
-        ).numpy()
+        member_loss = np.asarray(
+            ctx.scorer(ctx.target_model, ctx.member_data, device=ctx.device, batch_size=ctx.batch_size))
+        nonmember_loss = np.asarray(
+            ctx.scorer(ctx.target_model, ctx.nonmember_data, device=ctx.device, batch_size=ctx.batch_size))
         retention, auc = _retention_from_losses(member_loss, nonmember_loss)
 
         return AttackResult(
@@ -64,15 +61,17 @@ class LossMIA(Attack):
 
 
 def bootstrap_gold_null(gold_model, member_data: Dataset, nonmember_data: Dataset, *,
-                        device, batch_size: int, n_boot: int, seed: int = 0) -> list[float]:
+                        scorer: MembershipScorer, device, batch_size: int, n_boot: int,
+                        seed: int = 0) -> list[float]:
     """Null distribution of the loss-MIA retention score under 'truly forgotten'.
 
     Uses the gold retrain (which never saw the forget-set) and resamples member/non-member
-    losses with replacement. This captures SAMPLING variance only — not model/seed variance
-    — so the resulting FAR is optimistic (a lower bound). See PLAN.md calibration caveat.
+    losses with replacement. Uses the SAME injected `scorer` as the attack, so classifier and
+    LLM nulls are built by identical logic. Captures SAMPLING variance only — not model/seed
+    variance — so the resulting FAR is optimistic (a lower bound). See PLAN.md calibration caveat.
     """
-    m = models.per_sample_loss(gold_model, member_data, batch_size=batch_size, device=device).numpy()
-    nz = models.per_sample_loss(gold_model, nonmember_data, batch_size=batch_size, device=device).numpy()
+    m = np.asarray(scorer(gold_model, member_data, device=device, batch_size=batch_size))
+    nz = np.asarray(scorer(gold_model, nonmember_data, device=device, batch_size=batch_size))
     rng = np.random.default_rng(seed)
     null = []
     for _ in range(n_boot):
