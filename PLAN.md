@@ -58,11 +58,41 @@ that standard evals declare forgotten" claim, with error bars.
 - [ ] Detection AUC harness (clean vs. tampered) across more cases — deferred to post-v0
 
 ### M2 — LLM / TOFU  (the architecture-preservation test)
-- [ ] Add TOFU behind the SAME data abstraction (verify current HF name/config vs. installed
-      `datasets` version — do NOT guess the API; download only when we reach this milestone)
-- [ ] Small open LLM (GPT-2 / Pythia-scale) + a real unlearning baseline
-- [ ] Reuse the SAME `Attack` interface for loss-MIA on text (per-sequence token NLL)
-- [ ] Confirm: did the interface survive? Log any minimal change needed BEFORE refactoring.
+
+**M2a (de-risking spike) — verified facts:**
+- Deps: `transformers==5.14.1`, `datasets==5.0.0`, `accelerate==1.14.0` installed + pinned.
+- TOFU dataset id = **`locuslab/TOFU`** (canonical; 100k downloads). **Plain JSON data repo, NO
+  loading script** → datasets 5.0.0 loads it (verified empirically). 18 configs; schema is
+  `{question, answer}` strings; each config is a single `train` split. Forget/retain are
+  **paired configs** (`forget10` + `retain90`), not splits. `holdout*` = same-distribution
+  never-trained QAs = the natural MIA non-member set.
+- Model = **`locuslab/tofu_ft_phi-1.5`** (Phi-1.5, 1.3B, ~2.6 GB, fits the 4060). It is
+  **TOFU-finetuned** (members baked in), so the NLL check needs no training. The smaller
+  `tofu_ft_gpt2` / `tofu_ft_pythia-1.4b` do NOT exist (404-verified); Llama-2-7B is the only
+  other official finetune (13.5 GB, too big for the 4060 now).
+- [x] M2a step 4 — GREEN LIGHT. Per-token (length-normalized) answer-only NLL, n=100 each:
+      forget10 (member) mean=0.090 vs holdout10 (non-member) mean=2.123 -> gap +2.03,
+      ZERO overlap (forget max 0.418 < holdout min 0.548), descriptive AUC=1.000. The Phi-1.5
+      finetune memorized the forget answers (~0.09 NLL/token); holdout unseen (~2.1). Signal is
+      huge -> big baseline for M2b's unlearning to erode. Length-normalized + answer-only span
+      (identical template both sets), so NOT a length artifact.
+
+**M2a GOTCHA (must handle in M2b code):** TOFU finetune repos ship NO tokenizer files.
+`AutoTokenizer.from_pretrained("locuslab/tofu_ft_phi-1.5")` does NOT error — it silently
+returns a GPT2Tokenizer with **vocab_size=0** (broken). Load the tokenizer from the BASE
+model `microsoft/phi-1_5` (CodeGenTokenizer, vocab 50257). Also: the MODEL repo id
+(`locuslab/tofu_ft_phi-1.5`) and the DATA repo id (`locuslab/TOFU`) are distinct — don't
+cross them in `load_dataset`.
+
+**M2b RUNWAY (de-risk — recorded, NOT acted on yet):** the auditor's whole trio exists
+pre-baked at Phi-1.5 scale, so **M2b needs NO LLM training**: `tofu_ft_phi-1.5` (members) /
+`tofu_ft_retain90_phi-1.5` (**gold, truly forgotten**) / `phi_grad_ascent_*`, `phi_grad_diff_*`,
+`phi_KL_*`, `phi_idk_*` (unlearned methods, forget01/05/10). Mirrors the CIFAR baseline/gold/
+unlearned structure directly — just swap trained models for downloaded checkpoints.
+
+- [ ] M2b: add TOFU behind the SAME data abstraction; reuse the SAME `Attack` interface for
+      text loss-MIA (per-sequence token NLL); CONFIRM the interface survives + log any minimal
+      change BEFORE refactoring. (Separate proposal first, per plan.)
 
 ### M3 — calibrated score + attack battery
 - [ ] Real calibration: null distribution from clean cases -> threshold at target FAR
