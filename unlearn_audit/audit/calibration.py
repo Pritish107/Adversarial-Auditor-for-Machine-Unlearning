@@ -49,7 +49,7 @@ class Calibrator:
             )
         null = np.asarray(null_scores, dtype=float)
         threshold = float(np.quantile(null, 1.0 - self.target_far))
-        far = float(np.mean(null >= threshold))
+        far = float(np.mean(null > threshold))     # strict >, matches the decision rule (C3)
         return CalibrationResult(
             calibrated=True,
             threshold=threshold,

@@ -19,7 +19,7 @@ dependencies = [
 dev = ["pytest"]
 
 [tool.setuptools]
-packages = ["unlearn_audit", "unlearn_audit.unlearn", "unlearn_audit.attacks", "unlearn_audit.audit"]
+packages = ["unlearn_audit", "unlearn_audit.unlearn", "unlearn_audit.attacks", "unlearn_audit.audit", "unlearn_audit.llm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

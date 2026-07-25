@@ -84,15 +84,40 @@ model `microsoft/phi-1_5` (CodeGenTokenizer, vocab 50257). Also: the MODEL repo 
 (`locuslab/tofu_ft_phi-1.5`) and the DATA repo id (`locuslab/TOFU`) are distinct — don't
 cross them in `load_dataset`.
 
-**M2b RUNWAY (de-risk — recorded, NOT acted on yet):** the auditor's whole trio exists
-pre-baked at Phi-1.5 scale, so **M2b needs NO LLM training**: `tofu_ft_phi-1.5` (members) /
-`tofu_ft_retain90_phi-1.5` (**gold, truly forgotten**) / `phi_grad_ascent_*`, `phi_grad_diff_*`,
-`phi_KL_*`, `phi_idk_*` (unlearned methods, forget01/05/10). Mirrors the CIFAR baseline/gold/
-unlearned structure directly — just swap trained models for downloaded checkpoints.
+**M2b RUNWAY — ⚠️ RETRACTED, THE PRE-BAKED CHECKPOINTS ARE BROKEN (verified 2026-07-25):**
+The earlier "whole trio exists pre-baked, no LLM training" note was WRONG. Verified against HF:
+- `tofu_ft_phi-1.5` (members/baseline): **REAL, works** (reproduced the spike through LossMIA).
+- `tofu_ft_retain90_phi-1.5` (intended GOLD): **byte-identical DUPLICATE of the full model**
+  (raw-disk max abs weight diff = 0.0; stored fp32 vs baseline bf16, same values). Memorized
+  forget10 identically -> USELESS as a truly-forgotten reference.
+- `phi_grad_ascent_* / phi_grad_diff_* / phi_KL_* / phi_idk_*` (ALL forget fractions) and the
+  llama2 unlearned repos: **EMPTY** — contain only `.gitattributes` + `README.md`, NO weights.
 
-- [ ] M2b: add TOFU behind the SAME data abstraction; reuse the SAME `Attack` interface for
-      text loss-MIA (per-sequence token NLL); CONFIRM the interface survives + log any minimal
-      change BEFORE refactoring. (Separate proposal first, per plan.)
+Consequence: only the baseline model is usable. A valid GOLD/null and the UNLEARNED models to
+audit must come from elsewhere. Gold substitute under evaluation = base `microsoft/phi-1_5`
+(never saw forget10 or holdout10 -> should score ~chance). Unlearned models will likely have to
+be PRODUCED locally (grad-ascent/etc. on Phi-1.5) — which reintroduces (light) LLM training —
+OR the no-training first cut uses the training-free guardrail strawman only.
+
+**DECIDED (2026-07-25):** M2b scope = the TRAINING-FREE guardrail headline, mirroring CIFAR:
+baseline (members) + guardrail wrapper (frozen weights, output filter deflects forget10) +
+base-Phi null. Reproduces the exact validated CIFAR result in text — forget-accuracy -> 0 but
+per-token NLL untouched -> MIA-AUC ~1.0 -> RETENTION DETECTED — through the same auditor. That
+IS the cross-modal generalization claim. No unlearning checkpoints needed.
+
+- [x] Gold/null substitute = base `microsoft/phi-1_5` (never saw forget10 OR holdout10). Doubles
+      as the auditor's NEGATIVE CONTROL: proves the audit reads FORGOTTEN on a never-memorized
+      model, not always "retention". Validated by: forget10-vs-holdout10 AUC ~0.5 via same path.
+- [ ] M2b build: text guardrail (predict-path deflects on forget10; forward/NLL untouched);
+      run baseline + guardrail + base-Phi-null through the real `audit()`; three-case text result.
+
+**M3 LIMITATION (log now, state in paper):** the "official" locuslab TOFU-unlearned Phi
+checkpoints (`phi_grad_ascent_* / phi_grad_diff_* / phi_KL_* / phi_idk_*`) are EMPTY repos —
+weights were never uploaded, so they CANNOT be downloaded or reproduced. M3's real unlearning
+methods must therefore be TRAINED BY US with our own (known, logged) hyperparameters. Upside:
+more trustworthy/reproducible than the corrupted official repos. Cost: our unlearned-model
+results are NOT directly comparable to published TOFU leaderboard numbers — a stated scoping
+limitation, not a flaw.
 
 ### M3 — calibrated score + attack battery
 - [ ] Real calibration: null distribution from clean cases -> threshold at target FAR
@@ -146,6 +171,28 @@ coarse; more independent gold seeds (not more bootstrap resamples) are what tigh
 
 Earlier single-gold state (superseded, kept for context): bootstrapping ONE gold captured
 sampling variance only, making the FAR an optimistic lower bound.
+
+### C3 — LLM null (base-Phi) carries a text-difficulty offset (two faces)
+Base `microsoft/phi-1_5` on forget10-vs-holdout10 scores **MIA-AUC 0.294** (member NLL 2.071 >
+non-member 1.684). It never saw either set, so this is NOT membership — it is a **difficulty
+asymmetry between the two TOFU question sets**: forget10 answers are intrinsically ~0.39
+nats/token harder for an untrained model. The offset runs in the SAFE direction (makes forget10
+look *less* member-like → cannot cause false alarms). Two faces:
+  * As a NEGATIVE CONTROL ("does the auditor say forgotten?"): **passes cleanly, retention 0.**
+  * As a CALIBRATION NULL ("what threshold is forgotten?"): **0.294 is worse than optimistic —
+    it is DEGENERATE.** Base-Phi's AUC is so far below 0.5 that every bootstrap clips to
+    retention 0, so the null is a **point mass at 0** -> threshold 0. With the old `>=` decision
+    rule this flagged the null itself (base-Phi mislabeled "detected", FAR reported 1.000 — the
+    calibrator honestly signalling its own null was degenerate).
+
+**Operator fix (adopted):** decision rule is now **strict `>`** (flag what EXCEEDS the forgotten
+baseline, not what equals it), and FAR = `mean(null > threshold)`. This makes base-Phi a USABLE
+null for the guardrail HEADLINE (base-Phi 0 -> forgotten, FAR 0; baseline/guardrail 1.0 ->
+detected; signal towers at 1.0 so the point-mass null suffices). It does **NOT** make base-Phi a
+GOOD calibration null: a point-mass-at-0 null has no spread and **cannot calibrate a GRADED
+result**. For M3's real unlearning methods (which may land at partial retention, e.g. ~0.3), a
+**difficulty-matched non-member set is MANDATORY, not optional** — the operator fix is not a
+substitute for it. (forget10/holdout10 are not difficulty-matched: base-Phi AUC 0.294.)
 
 ## Open questions
 

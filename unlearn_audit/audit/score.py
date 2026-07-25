@@ -43,7 +43,10 @@ def audit(results: Sequence[AttackResult], *, aggregate: str = "max",
           target_far: float = 0.05, null_scores: Optional[Sequence[float]] = None) -> AuditReport:
     retention = aggregate_retention(results, aggregate)
     calib = Calibrator(target_far=target_far).calibrate(retention, null_scores=null_scores)
-    detected = (retention >= calib.threshold) if calib.calibrated else None
+    # STRICT >: flag only what EXCEEDS the forgotten baseline, not what merely equals it.
+    # Matters for a degenerate point-mass null (e.g. base-Phi at retention 0 -> threshold 0):
+    # `>=` would flag the null itself; `>` correctly reads it as forgotten. See PLAN.md C3.
+    detected = (retention > calib.threshold) if calib.calibrated else None
     return AuditReport(
         retention_score=retention,
         forgetting_score=1.0 - retention,
