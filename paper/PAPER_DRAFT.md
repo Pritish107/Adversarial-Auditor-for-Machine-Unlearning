@@ -208,12 +208,14 @@ example with an off-the-shelf never-trained model, no training and no target-mod
 > (n = 400, p < 1e-15) and 0.294 at n = 100 (p = 4.8e-07); MUSE-News forget–holdout AUC 0.522
 > (n = 100, p = 0.59, n.s.), controls 0.499 and 0.522.
 
-*Excluded: MUSE-Books.* Its text is Harry Potter, which essentially every general-purpose base
-LM has seen in pretraining, so no never-trained probe exists for it and any gap is
-uninterpretable — memorization cannot be separated from difficulty. Its numbers confirm the
-diagnosis rather than the finding: forget–holdout 0.302, but retain–holdout 0.153 and
-forget–retain 0.733, i.e. the three splits disagree with one another in a way no membership
-account explains. We report it for completeness and rest nothing on it.
+*Excluded: MUSE-Books.* **Its forget–holdout AUC of 0.302 superficially resembles TOFU's 0.332
+and must not be read as corroboration** — the controls show its splits are incoherent:
+retain–holdout is 0.153 and forget–retain is 0.733, i.e. the three splits disagree with one
+another in a way no membership account explains. The cause is contamination: its text is Harry
+Potter, which essentially every general-purpose base LM has seen in pretraining, so no
+never-trained probe exists for it and any gap is uninterpretable — memorization cannot be
+separated from difficulty. Its numbers confirm that diagnosis, not our finding. We report it
+for completeness and rest nothing on it.
 
 ---
 
