@@ -21,3 +21,6 @@ outputs/
 Thumbs.db
 .vscode/
 .idea/
+
+# paper build intermediates (paper.pdf itself IS committed)
+paper/build/

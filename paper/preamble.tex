@@ -1,0 +1,31 @@
+% Deposit PDF preamble. Layout only -- no content, no numbers.
+
+% Figures sized to the text block, captions below (pandoc emits \caption after \includegraphics).
+% paper.tex is built inside build/, so figure paths resolve one level up.
+\usepackage{graphicx}
+\graphicspath{{../}{./}}
+\usepackage[font=small,labelfont=bf,skip=6pt]{caption}
+
+% Latin Modern lacks several glyphs the paper uses, and tectonic only WARNS on a missing
+% character -- it drops it silently from the PDF, which would corrupt numbers like "≈0.33"
+% and "AUC ≈ 0.5 ⇒ forgotten". Every non-ASCII symbol in the body is mapped explicitly so
+% nothing can disappear; the build then asserts zero "Missing character" warnings.
+\usepackage{newunicodechar}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{≈}{\ensuremath{\approx}}
+\newunicodechar{⇒}{\ensuremath{\Rightarrow}}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{−}{\ensuremath{-}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{⟨}{\ensuremath{\langle}}
+\newunicodechar{⟩}{\ensuremath{\rangle}}
+
+% Slightly roomier line spacing for on-screen reading of a preprint.
+\usepackage{setspace}
+\setstretch{1.06}
+
+% Keep floats near their reference; a preprint reads badly with figures pushed to the end.
+\usepackage{float}
+\usepackage{placeins}
