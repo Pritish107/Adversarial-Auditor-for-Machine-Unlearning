@@ -123,6 +123,46 @@ model and every `phi_grad_ascent_*` / `grad_diff_*` / `KL_*` / `idk_*` repo is e
 breaks the auditing mode the benchmark actually supports, and the mode that would survive it is
 the one the benchmark cannot supply.
 
+## EXP-3 — `exp3_muse_probe.py`
+
+**Shows:** the offset is **TOFU-specific** — and that makes this the **positive control** EXP-1
+needed. The same probe fires on TOFU and stays at chance on MUSE-News at the *same* sample
+size, so it discriminates a sound reference from an unsound one rather than always finding a
+gap.
+
+```
+python -m unlearn_audit.experiments.exp3_muse_probe [--n N] [--books]   # ~3 min on a 4060
+```
+
+Target is `muse-bench/MUSE-News`, config `privleak`, splits `{forget, holdout, retain}` (100
+texts each) — three mutually disjoint subsets of **one** corpus, BBC articles published after
+August 2023, collected in a single pass. Probe is the same base `microsoft/phi-1_5`, which
+predates that window and is therefore blind to all three splits. MUSE is prose, so the scored
+span is the whole text (uniform 512-token prefix) rather than an answer; the reduction is the
+repo scorer with prompt `"{q}"` over `("", text)` pairs, so the number is computed by the same
+function TOFU's was.
+
+| comparison | member | non-mem | AUC | gap | p |
+|---|---|---|---|---|---|
+| forget vs holdout | 2.994 | 3.034 | **0.522** | +0.039 | 0.59 (n.s.) |
+| *control* forget vs retain | 2.994 | 2.992 | 0.499 | −0.003 | 0.98 (n.s.) |
+| *control* retain vs holdout | 2.992 | 3.034 | 0.522 | +0.042 | 0.59 (n.s.) |
+| **TOFU at matched n=100** | 2.071 | 1.684 | **0.294** | −0.387 | **4.8e-07** |
+
+The last row is the point: the MUSE null is not a power artifact. The script prints it
+automatically whenever `exp1_probe_nll.npz` is present.
+
+**Construction rule this yields:** *partition one corpus; do not regenerate a reference later.*
+MUSE-News splits a single collection pass and passes; TOFU's holdout was regenerated ~14 months
+after release and fails.
+
+> **`--books` is CONFOUNDED and never load-bearing.** MUSE-Books is Harry Potter, which
+> essentially every general-purpose base LM saw in pretraining, so no never-trained probe
+> exists and a gap cannot be attributed to difficulty rather than memorization. Its own numbers
+> show it: forget–holdout 0.302, but retain–holdout 0.153 and forget–retain 0.733 — the three
+> splits disagree with each other in a way no membership account explains. Kept for
+> reproducibility, excluded from every claim.
+
 ## `results/`
 
 | file | contents |
@@ -130,3 +170,5 @@ the one the benchmark cannot supply.
 | `exp1_probe_nll.npz` | base-Phi per-example NLL for forget10 / holdout10 / retain90 |
 | `exp2_ladder.npz` | per-α NLLs + accuracies, matched-pair indices, both bootstrap nulls, guardrail arrays |
 | `exp2b_fine.npz` | per-α NLLs, AUCs, retentions, accuracies for the fine sweep |
+| `exp3_muse_news_nll.npz` | base-Phi per-example NLL for MUSE-News forget / holdout / retain |
+| `exp3_muse_books_nll.npz` | same for MUSE-Books — **confounded, excluded from all claims** |

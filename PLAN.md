@@ -306,6 +306,53 @@ the benchmark cannot supply.*
 - Repro: `unlearn_audit/experiments/` (exp1 / exp2 / exp2b + README, result `.npz` committed
   so every table above reproduces with no GPU).
 
+**M3 EXP-3 (2026-07-25) — is the difficulty offset TOFU-specific? YES — and that CONVERTS the
+finding into a DISCRIMINATING DIAGNOSTIC (the positive control EXP-1 was missing).**
+
+The sharpest objection to EXP-1 is "your probe just finds gaps everywhere — the result says
+more about base-Phi NLL than about TOFU." EXP-3 answers it: the same probe, same code path,
+same sample size, on a second benchmark whose reference is built differently.
+
+*Target (verified against installed `datasets`, not assumed):* `muse-bench/MUSE-News`, config
+`privleak`, splits `{forget, holdout, retain}`, 100 texts each, near-identical lengths
+(8053/8051/8070 mean chars). Three mutually disjoint subsets of ONE corpus — BBC articles
+published AFTER AUG 2023, collected in a single pass so the target model (Llama-2-7B) had
+never seen them. Probe = base `microsoft/phi-1_5` (already local), which predates that window
+and is blind to all three splits; residual overlap would hit forget and holdout SYMMETRICALLY
+and so cannot manufacture a gap.
+
+    comparison                          member  nonmem  AUC     gap      p
+    MUSE-News forget vs holdout         2.994   3.034   0.522   +0.039   0.59      matched (n.s.)
+    CONTROL   forget vs retain          2.994   2.992   0.499   -0.003   0.98      matched (n.s.)
+    CONTROL   retain vs holdout         2.992   3.034   0.522   +0.042   0.59      matched (n.s.)
+    TOFU forget10 vs holdout10 [n=100]  2.071   1.684   0.294   -0.387   4.8e-07   MISMATCHED
+    TOFU forget10 vs holdout10 [n=400]  2.072   1.748   0.332   -0.324   1.9e-16   MISMATCHED
+
+- **MUSE-News PASSES.** Every comparison is statistically indistinguishable from chance; the
+  offset is +0.039 nats/token, an order of magnitude below TOFU's and in the OPPOSITE direction.
+- **★ THE MATCHED-n COMPARISON IS THE LOAD-BEARING ONE** — it kills the "MUSE is just
+  low-power" rebuttal. At the SAME n=100, TOFU is still at AUC 0.294, p=4.8e-07. One benchmark
+  fails decisively, the other passes cleanly, same instrument. **The probe DISCRIMINATES.**
+- **CLAIM REFRAMED (the old one is FALSIFIED).** "The mechanism is benchmark-agnostic in
+  principle" is dead — a second benchmark passed. The surviving, better-evidenced claim:
+  *a difficulty-matched reference is REQUIRED but NOT AUTOMATIC — it depends on construction;
+  here is a cheap probe that verifies it, and it discriminates.*
+- **CONSTRUCTION RULE (the actionable output):** *partition one corpus; do NOT regenerate a
+  reference later.* MUSE-News splits a single collection pass -> passes. TOFU's holdout was
+  regenerated ~14 months post-release -> fails. Cost of the check: one forward pass per example
+  with an off-the-shelf never-trained model. No training, no target-model access.
+- **MUSE-Books EXCLUDED — contamination-confounded, never load-bearing.** It is Harry Potter;
+  essentially every base LM saw it in pretraining, so no never-trained probe exists and a gap
+  cannot be attributed to difficulty vs memorization. Its numbers self-diagnose: forget-holdout
+  0.302 BUT retain-holdout 0.153 and forget-retain 0.733 — the three splits disagree with each
+  other in a way no membership account explains. Kept reproducible behind `--books`, cited nowhere.
+- **Residual limitations (replacing the old "one benchmark, one model family"):** two
+  benchmarks is still two (WMDP untested, and one clean benchmark is NOT evidence most are
+  clean); both probed with ONE model family (Phi-1.5), so a second probe family would confirm
+  these are properties of the DATA not of one tokenizer; and format (TOFU QA/answer-span vs
+  MUSE prose/512-token prefix) is not fully disentangled from construction by two data points.
+- Repro: `unlearn_audit/experiments/exp3_muse_probe.py` -> `results/exp3_muse_{news,books}_nll.npz`.
+
 - [ ] Real calibration: null distribution from clean cases -> threshold at target FAR
 - [ ] Attack #2: relearning-speed probe (uses `AttackContext.retrain_fn` seam)
 - [ ] Attack #3: activation probing

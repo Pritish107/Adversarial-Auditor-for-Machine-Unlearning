@@ -17,11 +17,19 @@
 Membership-inference attacks (MIAs) are the standard instrument for auditing whether a model
 has truly unlearned specified data, and every MIA-based audit depends on a *non-member
 reference set* assumed to be exchangeable with the forget set in all respects except
-membership. We show this assumption fails on TOFU, the most widely used LLM unlearning
-benchmark. Probing with a model that was never trained on any TOFU data, we find the
-benchmark's designated holdout set is systematically *easier* than the forget set by
-≈0.33 nats/token — a pure difficulty offset, since the probe model has no membership
-signal to exploit. We show this offset has three consequences for MIA-based auditing.
+membership. **That property is required but not automatic — it depends on how the reference
+was constructed, and it is essentially never checked.** We give a cheap probe that checks it,
+and show it discriminates. Scoring a benchmark's forget and holdout sets with a model that
+was never trained on either isolates pure difficulty, since such a model has no membership
+signal to exploit. On TOFU, the most widely used LLM unlearning benchmark, the designated
+holdout **fails**: it is systematically *easier* than the forget set by ≈0.33 nats/token
+(AUC 0.332, p < 1e-15). On MUSE-News the same probe at the same sample size **passes**
+(AUC 0.522, p = 0.59, not significant), so the probe distinguishes a sound reference from an
+unsound one rather than always reporting a gap. The two differ in construction, which gives a
+concrete rule: **partition one corpus, do not regenerate a reference later** — MUSE-News
+splits a single collection pass, whereas TOFU's holdout was regenerated separately, months
+after the original release. We then show the TOFU offset has three consequences for
+MIA-based auditing.
 First, it renders absolute-threshold auditing **uncalibratable**: the holdout-derived null
 distribution collapses to a degenerate point mass, admitting no valid decision threshold at
 any target false-alarm rate. Second, on a controlled synthetic retention gradient with
@@ -55,10 +63,13 @@ audit's calibration is corrupted at the source — before any attack, any thresh
 model. To our knowledge, no prior work checks whether this assumption holds on the benchmarks
 the field actually uses.
 
-We check it, and it fails. On TOFU — a synthetic-author QA benchmark and the most cited LLM
-unlearning testbed — the designated holdout set is measurably easier than the forget set for
-a model that has seen neither. Because the probe model has no membership information, the gap
-is *pure difficulty*, not leakage. We then trace what this offset does to MIA-based auditing:
+We check it. On TOFU — a synthetic-author QA benchmark and the most cited LLM unlearning
+testbed — it fails: the designated holdout set is measurably easier than the forget set for a
+model that has seen neither. Because the probe model has no membership information, the gap
+is *pure difficulty*, not leakage. On MUSE-News, at the same sample size, the same probe finds
+nothing (§3.1) — so this is a diagnostic that discriminates, not one that fires everywhere,
+and the property it tests is one benchmarks can and do get right. We then trace what the TOFU
+offset does to MIA-based auditing:
 
 - It makes absolute-threshold auditing **uncalibratable** (§4.1): the holdout-based null is a
   degenerate point mass with no threshold at any false-alarm rate.
@@ -80,7 +91,10 @@ survive it is the one the benchmark cannot supply.
 Our contributions:
 
 - **C1.** A measured, provenance-verified difficulty offset in TOFU's holdout set, localized
-  to the holdout (not the forget set) and shown not to be a length artifact (§3).
+  to the holdout (not the forget set) and shown not to be a length artifact (§3) — together
+  with a **positive control** on MUSE-News, where the identical probe at the identical sample
+  size returns chance, establishing that the check discriminates and yielding the construction
+  rule *partition one corpus, do not regenerate a reference later* (§3.1).
 - **C2.** A demonstration that the offset makes absolute-threshold auditing uncalibratable,
   and a difficulty-matched reference that restores calibration (§4.1, §6).
 - **C3.** A controlled demonstration that the offset causes missed detections, with a
@@ -158,6 +172,48 @@ the opposite direction. The offset persists against this bias.
 > **Figure 1.** NLL distributions for forget10, holdout10, and retain90 under the never-trained
 > model. The holdout distribution is visibly shifted toward lower NLL (easier).
 > *[`paper/figures/fig1_difficulty_distributions.pdf`]*
+
+### 3.1 Positive control: the probe passes a soundly-constructed reference (EXP-3)
+
+A probe that reports a gap on every benchmark would be worthless — the TOFU result would say
+more about our difficulty measure than about TOFU. We therefore ran the identical probe,
+through the identical code path, on a second benchmark whose reference is built differently.
+
+**MUSE-News** (`muse-bench/MUSE-News`, config `privleak`) supplies `forget`, `holdout` and
+`retain` as three mutually disjoint subsets of a *single* corpus — BBC articles published
+after August 2023, collected in one pass so that the target model had never seen them. Its
+holdout is documented as data never seen during pre-training or unlearning. We probe it with
+the same never-trained model (base Phi-1.5), which predates that collection window and is
+therefore blind to all three splits; any residual overlap would affect forget and holdout
+symmetrically and so could not manufacture a gap.
+
+**The probe passes.** forget vs holdout gives **AUC 0.522 (p = 0.59, not significant)**, an
+offset of +0.039 nats/token — an order of magnitude smaller than TOFU's and in the opposite
+direction. Controls agree: forget vs retain 0.499 (p = 0.98), retain vs holdout 0.522
+(p = 0.59). Every MUSE-News comparison is statistically indistinguishable from chance.
+
+**This is not a power artifact, and the matched-sample-size comparison is what shows it.**
+MUSE-News supplies 100 texts per split. Restricting TOFU to the *same* n = 100 still yields
+**AUC 0.294 (p = 4.8e-07)** — far from chance. Same probe, same code, same sample size: one
+benchmark fails decisively, the other passes cleanly. The diagnostic discriminates.
+
+**What separates them is construction, not subject matter.** MUSE-News partitions one corpus
+collected in a single pass; TOFU's holdout was regenerated separately, roughly fourteen months
+after the original release, and did not reproduce the original generation's difficulty
+distribution. Hence the rule we propose: *partition one corpus; do not regenerate a reference
+later.* Where regeneration is unavoidable, this probe is a cheap check — one forward pass per
+example with an off-the-shelf never-trained model, no training and no target-model access.
+
+> **Table 4.** Probe on both benchmarks, identical method. TOFU forget10–holdout10 AUC 0.332
+> (n = 400, p < 1e-15) and 0.294 at n = 100 (p = 4.8e-07); MUSE-News forget–holdout AUC 0.522
+> (n = 100, p = 0.59, n.s.), controls 0.499 and 0.522.
+
+*Excluded: MUSE-Books.* Its text is Harry Potter, which essentially every general-purpose base
+LM has seen in pretraining, so no never-trained probe exists for it and any gap is
+uninterpretable — memorization cannot be separated from difficulty. Its numbers confirm the
+diagnosis rather than the finding: forget–holdout 0.302, but retain–holdout 0.153 and
+forget–retain 0.733, i.e. the three splits disagree with one another in a way no membership
+account explains. We report it for completeness and rest nothing on it.
 
 ---
 
@@ -293,10 +349,24 @@ missed-detection result on real unlearning methods (grad-ascent, NPO, etc.) requ
 those methods and a gold retrain — deferred to future work, and the natural extension of this
 paper.
 
-**One benchmark, one model family.** We study TOFU with Phi-1.5. Whether the specific offset
-recurs on MUSE, WMDP, or other model families is untested. The *mechanism* — an unchecked
-difficulty mismatch in the non-member reference — is benchmark-agnostic in principle, but the
-measured offset is TOFU-specific.
+**The offset is TOFU-specific; what generalizes is the check, not the defect.** We tested a
+second benchmark and it passed (§3.1), so we do not claim reference mismatch is widespread. We
+claim the weaker and better-evidenced thing: a difficulty-matched reference is required but
+not automatic, it depends on construction, and it is cheap to verify. Two benchmarks is still
+two — whether WMDP or other references pass is untested, and one clean benchmark is not
+evidence that most are clean.
+
+**One probe-model family.** Both benchmarks were probed with base Phi-1.5. A difficulty
+measure is model-dependent in principle, so a second probe family (Pythia, GPT-2-scale, a
+larger base model) would strengthen the claim that these are properties of the *data* rather
+than of one tokenizer and one pretraining mix. The controls make this unlikely to be an
+artifact — under the same probe, TOFU's two original-generation splits are matched (0.514)
+while its regenerated holdout is not (0.332) — but it remains untested.
+
+**Prose versus QA.** The two benchmarks also differ in format: TOFU is short QA scored over
+the answer span, MUSE-News is long-form prose scored over a fixed 512-token prefix. That the
+probe behaves sensibly on both is reassuring, but format and construction are not fully
+disentangled by two data points.
 
 **Matched subpopulation.** The restored-calibration results audit a difficulty-matched
 subpopulation of the forget set, not its entirety.
@@ -323,7 +393,8 @@ warped yardstick reports a warped result, however sophisticated the attack.
 
 All experiments and result arrays are released. Every table and figure re-derives from the
 committed arrays without a GPU (verified): `exp1_probe_nll.npz`, `exp2_ladder.npz`,
-`exp2b_fine.npz`, with rerun instructions in the experiments README.
+`exp2b_fine.npz`, `exp3_muse_news_nll.npz`, `exp3_muse_books_nll.npz`, with rerun
+instructions in the experiments README.
 
 ---
 
@@ -343,6 +414,9 @@ committed arrays without a GPU (verified): `exp1_probe_nll.npz`, `exp2_ladder.np
 - [x] §4.3 α=0.7 receipt 0.162 / 0.541 / 0.970; 3.34× under-report; monotone under both refs
 - [x] §5 spread 0.196 → 0.019 (≈0.20 → ≈0.02)
 - [x] §6 caliper 0.05; 287/400 pairs; matched AUC 0.509; residual imbalance +0.015
+- [x] §3.1 EXP-3 positive control: MUSE-News forget–holdout AUC 0.522, p 0.59 (n.s.), gap
+      +0.039; controls 0.499 (p 0.98) and 0.522 (p 0.59); TOFU at matched n=100 AUC 0.294,
+      p 4.8e-07; MUSE-Books excluded as contamination-confounded (0.302 / 0.153 / 0.733)
 
 **NOT re-derivable from the arrays — RE-CHECK at submission time (upstream can drift):**
 
