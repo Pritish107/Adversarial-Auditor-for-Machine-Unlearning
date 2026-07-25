@@ -1,0 +1,16 @@
+# Figure-generation dependencies ONLY — deliberately kept out of requirements.txt so the
+# auditor's runtime deps stay lean. Nothing in unlearn_audit/ imports these.
+#
+#   pip install -r requirements.txt -r requirements-paper.txt
+#   python paper/make_figures.py
+#
+# Equivalent extra: pip install -e ".[paper]"
+#
+# Pinned because "every table and figure reproduces from the committed .npz arrays" is part
+# of the paper's reproducibility claim — an unpinned matplotlib can change default styling,
+# text metrics, and PDF output across versions.
+matplotlib==3.11.1
+
+# scipy is already pulled in transitively by scikit-learn (requirements.txt); make_figures.py
+# imports it directly for gaussian_kde, so it is named here too.
+scipy==1.17.1

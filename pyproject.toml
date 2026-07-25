@@ -17,9 +17,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+# Figure generation only — NOT an auditor runtime dependency. Pinned because "the figures
+# reproduce from the committed arrays" is part of the reproducibility claim.
+#   pip install -e ".[paper]"   then   python paper/make_figures.py
+paper = ["matplotlib==3.11.1"]
 
 [tool.setuptools]
-packages = ["unlearn_audit", "unlearn_audit.unlearn", "unlearn_audit.attacks", "unlearn_audit.audit", "unlearn_audit.llm"]
+packages = ["unlearn_audit", "unlearn_audit.unlearn", "unlearn_audit.attacks", "unlearn_audit.audit", "unlearn_audit.llm", "unlearn_audit.experiments"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
