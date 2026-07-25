@@ -148,8 +148,12 @@ def figure2(e1, e2, e2b):
     x_match = cross(A, RM, thr_m)
     rungs = [0.80, 0.85, 0.90]
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(7.0, 3.0),
-                                   gridspec_kw={"width_ratios": [1.32, 1], "wspace": 0.16})
+    fig = plt.figure(figsize=(7.0, 3.25))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.32, 1], height_ratios=[1, 0.15],
+                          wspace=0.16, hspace=0.45)
+    axL = fig.add_subplot(gs[0, 0])
+    axR = fig.add_subplot(gs[0, 1])
+    axS = fig.add_subplot(gs[1, 1])          # verdict strip, under panel (b)
 
     for ax, zoom in [(axL, False), (axR, True)]:
         ax.axvspan(x_hold, x_match, color=MUTED, alpha=0.13, linewidth=0, zorder=0)
@@ -175,7 +179,7 @@ def figure2(e1, e2, e2b):
 
     # one shared x-label for both panels (two separate labels collide across the gutter)
     fig.supxlabel(r"interpolation coefficient $\alpha$   (synthetic retention gradient —"
-                  " NOT an unlearning method)", fontsize=9, color=INK, y=-0.045)
+                  " NOT an unlearning method)", fontsize=9, color=INK, y=-0.03)
 
     axL.set_ylabel("residual-retention score")
     axL.set_xlim(-0.02, 1.02)
@@ -200,6 +204,51 @@ def figure2(e1, e2, e2b):
              "matched: RETENTION DETECTED\nholdout10: “forgotten”",
              ha="center", va="center", fontsize=7.6, color=INK, linespacing=1.5)
 
+    # ---- verdict strip: makes the FLIP a shape rather than a deduction -------------------
+    # Two rows, one per reference, filled where that auditor says RETENTION DETECTED and
+    # blank where it says forgotten. The rows agree left, DISAGREE across the band, agree
+    # right. Segment edges are the crossings themselves (x_hold / x_match), so the
+    # disagreement region lines up with the shaded band by construction, not by eye.
+    # Fill-vs-blank carries the verdict independently of hue, so the strip survives
+    # greyscale print; hue only says which reference the row belongs to.
+    x0, x1 = 0.695, 1.005
+    axS.set_xlim(x0, x1)
+    axS.set_ylim(0, 1)
+    axS.axvspan(x_hold, x_match, color=MUTED, alpha=0.13, linewidth=0, zorder=0)
+    for x in (x_hold, x_match):
+        axS.axvline(x, color=MUTED, lw=0.8, ls=(0, (1, 2.5)), zorder=1)
+
+    # An inline label is drawn ONLY where it fits with padding -- a segment label that
+    # overflows its own mark is worse than no label (the holdout DETECTED segment is far
+    # too narrow). The fill/blank pattern carries the verdict regardless; the caption below
+    # states the mapping.
+    IN_PER_DATA = 2.40 / (x1 - x0)                # strip axes is ~2.40in wide
+    def fits(text, width_data, pt):
+        return len(text) * 0.58 * pt / 72.0 * 1.25 <= width_data * IN_PER_DATA
+
+    for (lo, hi), color, boundary, label in [((0.55, 0.95), S1, x_match, "matched"),
+                                             ((0.06, 0.46), S2, x_hold, "holdout10")]:
+        axS.add_patch(plt.Rectangle((x0, lo), boundary - x0, hi - lo, facecolor=color,
+                                    alpha=0.88, linewidth=0, zorder=2))
+        axS.add_patch(plt.Rectangle((boundary, lo), x1 - boundary, hi - lo, facecolor="#efeeea",
+                                    edgecolor=AXIS, linewidth=0.5, zorder=2))
+        axS.text(x0 - 0.006, (lo + hi) / 2, label, ha="right", va="center",
+                 fontsize=7.0, color=INK_2)
+        if fits("RETENTION DETECTED", boundary - x0, 6.3):
+            axS.text((x0 + boundary) / 2, (lo + hi) / 2, "RETENTION DETECTED", ha="center",
+                     va="center", fontsize=6.3, color="#ffffff", zorder=3)
+        if fits("forgotten", x1 - boundary, 6.3):
+            axS.text((boundary + x1) / 2, (lo + hi) / 2, "forgotten", ha="center",
+                     va="center", fontsize=6.3, color=INK_2, zorder=3)
+
+    axS.text(x0 - 0.006, 1.32, "verdict", ha="right", va="center", fontsize=7.0, color=MUTED)
+    axS.text(x1, -0.42, "filled = RETENTION DETECTED    ·    blank = forgotten",
+             ha="right", va="top", fontsize=6.6, color=MUTED)
+    axS.set_xticks([])
+    axS.set_yticks([])
+    for sp in axS.spines.values():
+        sp.set_visible(False)
+
     handles = [
         Line2D([], [], color=S1, ls="-", lw=1.9, marker="o", ms=4.2,
                markeredgecolor=SURFACE, label="difficulty-matched reference (n=287)"),
@@ -211,7 +260,7 @@ def figure2(e1, e2, e2b):
     # Identity rides the legend + line style + marker shape, never colour alone. Floating
     # direct labels were dropped here: the two curves converge on the right and the labels
     # collided with the data (marks-and-anatomy sanctions the legend fallback on collision).
-    fig.legend(handles=handles, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.22),
+    fig.legend(handles=handles, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.155),
                labelcolor=INK_2, handlelength=2.4, columnspacing=1.6)
 
     save(fig, "fig2_missed_detection")
