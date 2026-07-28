@@ -63,10 +63,10 @@ audit's calibration is corrupted at the source — before any attack, any thresh
 model. To our knowledge, no prior work checks whether this assumption holds on the benchmarks
 the field actually uses.
 
-We check it. On TOFU — a synthetic-author QA benchmark and the most cited LLM unlearning
+We check it. On TOFU [1] — a synthetic-author QA benchmark and the most cited LLM unlearning
 testbed — it fails: the designated holdout set is measurably easier than the forget set for a
 model that has seen neither. Because the probe model has no membership information, the gap
-is *pure difficulty*, not leakage. On MUSE-News, at the same sample size, the same probe finds
+is *pure difficulty*, not leakage. On MUSE-News [2], at the same sample size, the same probe finds
 nothing (§3.1) — so this is a diagnostic that discriminates, not one that fires everywhere,
 and the property it tests is one benchmarks can and do get right. We then trace what the TOFU
 offset does to MIA-based auditing:
@@ -110,8 +110,10 @@ Our contributions:
 
 **MIA-based unlearning auditing.** The standard audit treats forgetting as the erasure of a
 membership signal: if an attacker cannot distinguish forget-set samples from non-members, the
-data is deemed forgotten. Loss- or perplexity-thresholding is the canonical black-box attack;
-numerous variants exist. All share the reliance on a non-member reference.
+data is deemed forgotten. Loss- or perplexity-thresholding is the canonical black-box attack
+[3]; numerous variants exist, including compression-normalised [4] and outlier-token scores
+[5, 6], and reference-model-calibrated likelihood ratios [7]. All share the reliance on a
+non-member reference.
 
 **Meta-evaluation of unlearning metrics.** Recent work evaluates whether unlearning *metrics*
 faithfully reflect knowledge and resist stress tests. This line assesses metrics *against* a
@@ -128,7 +130,7 @@ orthogonal and prior: the reference itself carries a difficulty offset, which co
 estimators built on top of it regardless of their sophistication.
 
 **Relative (gold-referenced) rules.** Some evaluations compare a candidate model to a gold
-retrain model on the same reference set. We show in §5 that these are robust to the difficulty
+retrain model on the same reference set [1, 2]. We show in §5 that these are robust to the difficulty
 offset — but require a valid gold retrain that the benchmark does not provide.
 
 *Positioning in one line each.* Against meta-evaluation frameworks: they evaluate metrics
@@ -141,7 +143,7 @@ they are offset-robust but unavailable on the benchmark as shipped.
 ## 3. A Difficulty Offset in the Standard Reference (EXP-1)
 
 **Probe design.** To isolate difficulty from membership, we score TOFU's forget and holdout
-sets with a model that was never trained on *any* TOFU data (base Phi-1.5). Such a model
+sets with a model that was never trained on *any* TOFU data (base Phi-1.5 [8]). Such a model
 cannot exploit membership; any systematic score gap between forget and holdout is therefore
 attributable to intrinsic difficulty alone. We use answer-only, length-normalized negative
 log-likelihood (NLL) per token as the difficulty measure, and report separability as ROC-AUC
@@ -179,9 +181,9 @@ A probe that reports a gap on every benchmark would be worthless — the TOFU re
 more about our difficulty measure than about TOFU. We therefore ran the identical probe,
 through the identical code path, on a second benchmark whose reference is built differently.
 
-**MUSE-News** (`muse-bench/MUSE-News`, config `privleak`) supplies `forget`, `holdout` and
+**MUSE-News** [2] (`muse-bench/MUSE-News`, config `privleak`) supplies `forget`, `holdout` and
 `retain` as three mutually disjoint subsets of a *single* corpus — BBC articles published
-after August 2023, collected in one pass so that the target model had never seen them. Its
+after August 2023, collected in one pass so that the target model [9] had never seen them. Its
 holdout is documented as data never seen during pre-training or unlearning. We probe it with
 the same never-trained model (base Phi-1.5), which predates that collection window and is
 therefore blind to all three splits; any residual overlap would affect forget and holdout
@@ -278,8 +280,8 @@ matched boundary α≈0.94).
 ### 4.3 Which MIAs inherit the bias (C4)
 
 The offset corrupts *raw-score* MIAs — those that threshold an absolute membership score
-(LOSS, ZLib, Min-K, Min-K++) — because the reference's artificial easiness suppresses apparent
-separability. *Reference-normalized* MIAs, which subtract a per-example reference-model score,
+(LOSS [3], ZLib [4], Min-K [5], Min-K++ [6]) — because the reference's artificial easiness suppresses apparent
+separability. *Reference-normalized* MIAs [7], which subtract a per-example reference-model score,
 are unaffected, because the offset is common-mode and cancels. At α=0.7, the residual-retention
 readout is 0.162 for a raw LOSS attack against holdout10, 0.541 for the same attack against
 the matched reference, and 0.970 for the reference-normalized attack — a 3.3× under-report
@@ -347,7 +349,7 @@ qualifier travels with every matched number in the paper.
 interpolation, not real unlearning methods. The *reference mismatch itself* (§3) is measured on
 real data with a real, never-trained probe; the gradient only supplies a graded axis with known
 ground truth to show the mismatch has consequences under controlled conditions. Validating the
-missed-detection result on real unlearning methods (grad-ascent, NPO, etc.) requires training
+missed-detection result on real unlearning methods (grad-ascent, NPO [10], etc.) requires training
 those methods and a gold retrain — deferred to future work, and the natural extension of this
 paper.
 
@@ -355,7 +357,7 @@ paper.
 second benchmark and it passed (§3.1), so we do not claim reference mismatch is widespread. We
 claim the weaker and better-evidenced thing: a difficulty-matched reference is required but
 not automatic, it depends on construction, and it is cheap to verify. Two benchmarks is still
-two — whether WMDP or other references pass is untested, and one clean benchmark is not
+two — whether WMDP [11] or other references pass is untested, and one clean benchmark is not
 evidence that most are clean.
 
 **One probe-model family.** Both benchmarks were probed with base Phi-1.5. A difficulty
@@ -397,6 +399,50 @@ All experiments and result arrays are released. Every table and figure re-derive
 committed arrays without a GPU (verified): `exp1_probe_nll.npz`, `exp2_ladder.npz`,
 `exp2b_fine.npz`, `exp3_muse_news_nll.npz`, `exp3_muse_books_nll.npz`, with rerun
 instructions in the experiments README.
+
+---
+
+## References
+
+Venues are stated only where confirmed; everything else is cited as an arXiv preprint rather
+than asserting a publication venue.
+
+[1] P. Maini, Z. Feng, A. Schwarzschild, Z. C. Lipton, and J. Z. Kolter. *TOFU: A Task of
+Fictitious Unlearning for LLMs.* arXiv preprint arXiv:2401.06121, 2024.
+
+[2] W. Shi, J. Lee, Y. Huang, S. Malladi, J. Zhao, A. Holtzman, D. Liu, L. Zettlemoyer,
+N. A. Smith, and C. Zhang. *MUSE: Machine Unlearning Six-Way Evaluation for Language Models.*
+arXiv preprint arXiv:2407.06460, 2024. (Source of the PrivLeak metric.)
+
+[3] S. Yeom, I. Giacomelli, M. Fredrikson, and S. Jha. *Privacy Risk in Machine Learning:
+Analyzing the Connection to Overfitting.* In 31st IEEE Computer Security Foundations Symposium
+(CSF), pages 268–282, 2018. arXiv:1709.01604.
+
+[4] N. Carlini, F. Tramèr, E. Wallace, M. Jagielski, A. Herbert-Voss, K. Lee, A. Roberts,
+T. Brown, D. Song, Ú. Erlingsson, A. Oprea, and C. Raffel. *Extracting Training Data from
+Large Language Models.* In 30th USENIX Security Symposium, 2021. arXiv:2012.07805.
+
+[5] W. Shi, A. Ajith, M. Xia, Y. Huang, D. Liu, T. Blevins, D. Chen, and L. Zettlemoyer.
+*Detecting Pretraining Data from Large Language Models.* arXiv preprint arXiv:2310.16789, 2023.
+
+[6] J. Zhang, J. Sun, E. Yeats, Y. Ouyang, M. Kuo, J. Zhang, H. F. Yang, and H. Li.
+*Min-K%++: Improved Baseline for Detecting Pre-Training Data from Large Language Models.*
+arXiv preprint arXiv:2404.02936, 2024.
+
+[7] N. Carlini, S. Chien, M. Nasr, S. Song, A. Terzis, and F. Tramèr. *Membership Inference
+Attacks From First Principles.* arXiv preprint arXiv:2112.03570, 2021.
+
+[8] Y. Li, S. Bubeck, R. Eldan, A. Del Giorno, S. Gunasekar, and Y. T. Lee. *Textbooks Are
+All You Need II: phi-1.5 technical report.* arXiv preprint arXiv:2309.05463, 2023.
+
+[9] H. Touvron et al. *Llama 2: Open Foundation and Fine-Tuned Chat Models.* arXiv preprint
+arXiv:2307.09288, 2023.
+
+[10] R. Zhang, L. Lin, Y. Bai, and S. Mei. *Negative Preference Optimization: From Catastrophic
+Collapse to Effective Unlearning.* arXiv preprint arXiv:2404.05868, 2024.
+
+[11] N. Li et al. *The WMDP Benchmark: Measuring and Reducing Malicious Use With Unlearning.*
+arXiv preprint arXiv:2403.03218, 2024.
 
 ---
 
