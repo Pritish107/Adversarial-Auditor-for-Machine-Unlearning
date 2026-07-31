@@ -48,8 +48,28 @@ pandoc build/paper_body.md \
   --resource-path=.
 
 echo "[3/3] tectonic -> PDF"
+# Never let a failed run silently reuse a stale artifact from a previous successful build --
+# this masked a genuine fatal error once already (an invalid placeins package option made
+# tectonic exit nonzero with "No pages of output", but the leftover build/paper.pdf from an
+# EARLIER build still existed on disk, so the old "[ -f build/paper.pdf ]" check passed
+# trivially and the script copied stale, pre-fix content forward as if the build had
+# succeeded). Deleting it first means a failed run leaves nothing to fall back to.
+rm -f build/paper.pdf
+
+# `set -e` would abort on grep's own exit code (1 = "no lines matched", which is the common,
+# harmless case when there's nothing to filter) before we get to check tectonic's real exit
+# status, so this pipeline runs under `set +e` and the actual failure signal is tectonic's
+# own exit code, read from PIPESTATUS -- not file existence, not a warning-string grep.
+set +e
 tectonic build/paper.tex --outdir build --print 2>&1 | grep -viE "^note: downloading" \
-  | tee build/tectonic.log || true
+  | tee build/tectonic.log
+TECTONIC_STATUS="${PIPESTATUS[0]}"
+set -e
+
+if [ "$TECTONIC_STATUS" -ne 0 ]; then
+  echo "BUILD FAILED: tectonic exited with status $TECTONIC_STATUS -- see build/tectonic.log" >&2
+  exit 1
+fi
 
 # Fail loudly rather than deposit a PDF with silently-dropped glyphs or missing figures.
 if grep -qiE "Missing character|could not represent character" build/tectonic.log; then
@@ -59,6 +79,11 @@ if grep -qiE "Missing character|could not represent character" build/tectonic.lo
 fi
 if grep -qiE "Unable to load picture|not found on input line" build/tectonic.log; then
   echo "BUILD FAILED: a figure did not embed." >&2; exit 1
+fi
+if grep -qiE "Overfull .(vbox|hbox)" build/tectonic.log; then
+  echo "BUILD FAILED: a page overflowed its box (Overfull vbox/hbox) --" >&2
+  grep -iE "Overfull .(vbox|hbox)" build/tectonic.log | sort -u >&2
+  exit 1
 fi
 [ -f build/paper.pdf ] || { echo "BUILD FAILED: no PDF produced." >&2; exit 1; }
 

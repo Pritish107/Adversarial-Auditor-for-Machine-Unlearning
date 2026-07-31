@@ -52,15 +52,32 @@
 \usepackage{setspace}
 \setstretch{1.0}
 
-% Keep floats near their reference; a preprint reads badly with figures pushed to the end.
-% [subsection] auto-inserts a barrier at every \subsection. Section 6 alone has three
-% subsections (6.1/6.2/6.3), each with its own figure -- a [section]-level barrier let all
-% three drift together and flush as one group at the end of the section, piling fig3+fig2+
-% fig5 onto a single page and overflowing it by ~3 inches (diagnosed from the TeX transcript:
-% all three "<use ...>" lines land on the same page right before the Overfull \vbox). The
-% finer subsection barrier flushes each figure near its own reference instead.
+% Keep floats reasonably near their reference; a preprint reads badly with figures pushed
+% to the end. History worth keeping, because both alternatives were tried and rejected:
+%
+% - No barrier + default float fractions: an EARLIER, larger fig5 (before the fig5 collision
+%   fix reworked its layout and shrank it) let three figures (fig3/fig2/fig5) pile onto one
+%   page, overflowing it by ~3 inches.
+% - placeins [section]-level auto-barrier: the coarsest option placeins actually provides
+%   (there is no [subsection] option -- \usepackage[subsection]{placeins} is a hard LaTeX
+%   error, not a silent no-op, and using it produced a fatally-failed build once already; see
+%   build_pdf.sh's exit-code check, added after that failure was masked by a stale
+%   build/paper.pdf being copied forward unnoticed). [section] only flushes at the END of
+%   section 6 (which has three subsections), so it reproduced the exact same pile-up.
+% - A manual per-\subsection \FloatBarrier (via etoolbox's \pretocmd, since placeins has no
+%   finer option): this DID spread the three figures onto separate pages, but \FloatBarrier's
+%   forcing mechanism bypasses the topfraction/floatpagefraction machinery below entirely
+%   (confirmed: changing those fractions had zero effect on the barrier-forced case) and
+%   compelled an immediate, uncompromising placement instead of letting TeX defer -- which
+%   overflowed a DIFFERENT page (6.3's, which uniquely has both a table and a figure).
+%
+% What actually works: no barrier at all, relying purely on the loosened float fractions
+% below plus fig5's corrected (smaller) size. Verified via the TeX transcript: fig3/fig2/fig5
+% land on three separate pages (10/11/12) with zero Overfull/Underfull warnings anywhere in
+% the document. Left here unforced rather than reintroducing a barrier that fixes a pile-up
+% at the cost of risking a forced overflow elsewhere.
 \usepackage{float}
-\usepackage[subsection]{placeins}
+\usepackage{placeins}
 
 % Standard float-placement loosening for a float-dense document: base LaTeX's defaults
 % (topfraction 0.7, floatpagefraction 0.5, etc.) are tuned for the rare-float case and force
@@ -68,4 +85,4 @@
 \renewcommand{\topfraction}{0.90}
 \renewcommand{\bottomfraction}{0.80}
 \renewcommand{\textfraction}{0.10}
-\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\floatpagefraction}{0.35}

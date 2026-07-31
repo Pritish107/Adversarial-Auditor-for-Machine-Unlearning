@@ -374,39 +374,66 @@ def figure4(e1, e3n):
 
 # ==================================================================== Figure 5
 def figure5(e1, e2, e2b):
-    """Which MIA family inherits the offset: raw-score collapses, reference-normalised holds."""
+    """Which MIA family inherits the offset: raw-score collapses, reference-normalised holds.
+
+    Anti-collision layout (same discipline as fig2's verdict strip): the legend is moved
+    fully OUTSIDE the axes (three long labels cannot share in-plot space with three
+    criss-crossing curves without touching one of them), the combined "alpha=0.7: a/b/c"
+    string is split into three independent labels -- one per point, placed directly ABOVE
+    its own marker where the curve geometry is verified clear -- and the threshold label
+    moves to the left edge, where all three curves are still bunched near 1.0 and the region
+    under them is empty.
+    """
     A, RH, RM, RD = ladder(e1, e2, e2b)
     thr = Calibrator(target_far=0.05).calibrate(0.0, e2["null_match"]).threshold
 
-    fig, ax = plt.subplots(figsize=(5.2, 2.9))
+    fig, ax = plt.subplots(figsize=(5.6, 2.85))
     for Y, c, ls, mk, lab in [
             (RD, S3, ":", "^", "reference-normalised  (Reference)"),
             (RM, S1, "-", "o", "raw score vs difficulty-matched reference"),
             (RH, S2, "--", "s", "raw score vs holdout10  (LOSS/ZLib/Min-K/Min-K++)")]:
         ax.plot(A, Y, color=c, ls=ls, lw=1.9, marker=mk, ms=4.2,
                 markeredgecolor=SURFACE, markeredgewidth=1.1, label=lab)
-    ax.axhline(thr, color=MUTED, lw=1.0, ls=(0, (5, 3)))
-    ax.text(0.995, thr + 0.025, f"matched threshold {thr:.3f}", fontsize=7.0, color=INK_2,
-            ha="right")
 
-    # the alpha = 0.7 receipt quoted in the text
+    # Threshold label on the LEFT: at small alpha all three curves sit near 1.0, so the
+    # band just above the threshold line is empty there (unlike the right side, where the
+    # holdout/matched curves are converging toward the threshold itself).
+    ax.axhline(thr, color=MUTED, lw=1.0, ls=(0, (5, 3)))
+    ax.text(0.03, thr + 0.028, f"matched threshold {thr:.3f}", fontsize=7.0, color=INK_2,
+            ha="left")
+
+    # alpha = 0.7 receipt: three SEPARATE labels, each directly above its own marker. The
+    # three curves are ~0.4 apart in y at this x, so "directly above" lands in the gap to
+    # the next curve up, not on top of it -- verified against the actual y-values below.
     i = int(np.where(A == 0.7)[0][0])
     ax.axvline(0.7, color=MUTED, lw=0.8, ls=(0, (1, 2.5)))
     for Y, c in [(RD, S3), (RM, S1), (RH, S2)]:
         ax.plot([0.7], [Y[i]], marker="o", ms=8.5, color=c, markeredgecolor=SURFACE,
                 markeredgewidth=1.7, zorder=4)
-    ax.annotate(f"$\\alpha$=0.7:  {RD[i]:.3f}  /  {RM[i]:.3f}  /  {RH[i]:.3f}",
-                xy=(0.7, RH[i]), xytext=(0.66, 0.30), ha="right", fontsize=7.4, color=INK,
-                arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.7))
+    ax.text(0.7, RD[i] + 0.052, rf"$\alpha$=0.7: {RD[i]:.3f}", ha="center", va="bottom",
+            fontsize=7.2, color=INK)
+    ax.text(0.7, RM[i] + 0.05, f"{RM[i]:.3f}", ha="center", va="bottom",
+            fontsize=7.2, color=INK)
+    ax.text(0.7, RH[i] + 0.05, f"{RH[i]:.3f}", ha="center", va="bottom",
+            fontsize=7.2, color=INK)
+
     ax.set_xlabel(r"interpolation coefficient $\alpha$   (synthetic retention gradient —"
                   " NOT an unlearning method)")
     ax.set_ylabel("residual-retention score")
     ax.set_xlim(-0.02, 1.02)
-    ax.set_ylim(-0.03, 1.06)
+    ax.set_ylim(-0.03, 1.08)
     ax.yaxis.grid(True)
     ax.set_axisbelow(True)
-    ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.10), labelcolor=INK_2,
-          handlelength=2.2, fontsize=7.4)
+
+    # Legend fully outside the axes -- three long labels cannot be shoehorned into any
+    # in-plot gap between three criss-crossing curves without touching one of them. Kept
+    # compact (tight labelspacing, no extra borderaxespad) since this figure's total height
+    # -- plot plus external legend -- has to fit on one page alongside its own subsection
+    # heading and lead-in paragraph.
+    fig.legend(loc="upper center", bbox_to_anchor=(0.5, -0.06), ncol=1, frameon=False,
+              labelcolor=INK_2, handlelength=2.0, fontsize=7.2, labelspacing=0.35,
+              borderaxespad=0.2)
+
     save(fig, "fig5_mia_family")
     plt.close(fig)
     return A, RH, RM, RD
