@@ -6,10 +6,24 @@
 \graphicspath{{../}{./}}
 \usepackage[font=small,labelfont=bf,skip=6pt]{caption}
 
+% pandoc's default template auto-loads microtype, whose character-protrusion feature shifts
+% the first glyph of a bold run (e.g. the "T" in an auto-generated "Table 1:" label) into its
+% own content-stream position. The page renders correctly, but it makes some naive PDF text
+% extractors misjudge the word boundary and drop the leading letter from copy/paste or search
+% (observed: "Table 1" round-tripped as "able 1"). Disabling protrusion only (kerning and
+% tracking stay on) removes the artifact; the visual effect of protrusion is marginal at
+% article margins.
+\microtypesetup{protrusion=false}
+
 % Latin Modern lacks several glyphs the paper uses, and tectonic only WARNS on a missing
 % character -- it drops it silently from the PDF, which would corrupt numbers like "≈0.33"
 % and "AUC ≈ 0.5 ⇒ forgotten". Every non-ASCII symbol in the body is mapped explicitly so
 % nothing can disappear; the build then asserts zero "Missing character" warnings.
+% unicode-math maps \setminus to U+29F5 (REVERSE SOLIDUS OPERATOR), which latinmodern-math
+% does not contain -- the symbol would be silently dropped from the PDF. Alias it to
+% \backslash, which is present and renders identically for set difference.
+\AtBeginDocument{\renewcommand{\setminus}{\mathbin{\backslash}}}
+
 \usepackage{newunicodechar}
 \newunicodechar{α}{\ensuremath{\alpha}}
 \newunicodechar{θ}{\ensuremath{\theta}}
@@ -24,7 +38,7 @@
 
 % Slightly roomier line spacing for on-screen reading of a preprint.
 \usepackage{setspace}
-\setstretch{1.06}
+\setstretch{1.0}
 
 % Keep floats near their reference; a preprint reads badly with figures pushed to the end.
 \usepackage{float}

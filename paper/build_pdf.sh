@@ -40,7 +40,7 @@ pandoc build/paper_body.md \
   --variable=documentclass:article \
   --variable=papersize:a4 \
   --variable=fontsize:11pt \
-  --variable=geometry:"margin=1in" \
+  --variable=geometry:"margin=0.95in" \
   --variable=linkcolor:black \
   --variable=urlcolor:black \
   --variable=colorlinks:true \

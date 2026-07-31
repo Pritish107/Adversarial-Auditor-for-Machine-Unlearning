@@ -268,16 +268,171 @@ def figure2(e1, e2, e2b):
     return x_hold, x_match, thr_m
 
 
+# ==================================================================== shared ladder helper
+def ladder(e1, e2, e2b):
+    """Retention vs alpha under all three scorings, from the committed arrays.
+
+    Returns (alphas, LOSS-vs-holdout, LOSS-vs-matched, Reference-normalised). No new
+    experiment: every value is recomputed from the stored per-example NLLs with the repo's
+    own _retention_from_losses, exactly as exp2/exp2b did.
+    """
+    f, h = e1["forget"], e1["holdout"]
+    fi, hi = caliper_match(f, h, CALIPER)
+    bp_f, bp_h = e2["bp_f"], e2["bp_h"]
+    rows = []
+    for a in [0.0, 0.15, 0.3, 0.5, 0.7, 1.0]:
+        rows.append((a, e2[f"f_{a}"], e2[f"h_{a}"]))
+    for a in [0.75, 0.8, 0.85, 0.9, 0.95]:
+        rows.append((a, e2b[f"f_{a}"], e2b[f"h_{a}"]))
+    rows.sort(key=lambda r: r[0])
+    A = np.array([r[0] for r in rows])
+    RH = np.array([_retention_from_losses(r[1], r[2])[0] for r in rows])
+    RM = np.array([_retention_from_losses(r[1][fi], r[2][hi])[0] for r in rows])
+    RD = np.array([_retention_from_losses(r[1] - bp_f, r[2] - bp_h)[0] for r in rows])
+    return A, RH, RM, RD
+
+
+# ==================================================================== Figure 3
+def figure3(e2):
+    """The two calibration nulls: a degenerate point mass vs a usable distribution."""
+    nh, nm = e2["null_hold"], e2["null_match"]
+    thr = Calibrator(target_far=0.05).calibrate(0.0, nm).threshold
+
+    fig, ax = plt.subplots(figsize=(3.5, 2.5))
+    bins = np.linspace(-0.004, 0.20, 46)
+    ax.hist(nm, bins=bins, color=S1, alpha=0.55, edgecolor=S1, linewidth=0.8,
+            label=f"difficulty-matched  (sd {nm.std():.4f})")
+    # the holdout null is 200 draws all exactly at 0 -- a bar would be invisibly thin, so it
+    # is drawn as an explicit stem annotated with its count.
+    ax.vlines(0.0, 0, (np.histogram(nm, bins=bins)[0].max()) * 1.06, color=S2, lw=2.6,
+              label=f"holdout10  (sd {nh.std():.4f} — point mass)")
+    ax.plot([0.0], [(np.histogram(nm, bins=bins)[0].max()) * 1.06], marker="v", ms=6,
+            color=S2, markeredgecolor=SURFACE, markeredgewidth=1.2, clip_on=False)
+    ax.text(0.010, (np.histogram(nm, bins=bins)[0].max()) * 0.66,
+            f"all {nh.size} bootstrap\ndraws at exactly 0\n(no threshold exists)",
+            color=INK_2, fontsize=7.0, va="top", linespacing=1.4)
+    ax.axvline(thr, color=MUTED, lw=1.0, ls=(0, (5, 3)))
+    ax.text(thr + 0.004, ax.get_ylim()[1] * 0.42,
+            f"matched threshold\n{thr:.4f}  (FAR 0.05)", color=INK_2, fontsize=7.0,
+            linespacing=1.4)
+    ax.set_xlabel("retention score under the truly-forgotten null")
+    ax.set_ylabel("bootstrap draws")
+    ax.set_xlim(-0.006, 0.20)
+    ax.yaxis.grid(True)
+    ax.set_axisbelow(True)
+    ax.legend(loc="upper right", labelcolor=INK_2, handlelength=1.8, fontsize=7.4)
+    save(fig, "fig3_calibration_nulls")
+    plt.close(fig)
+    return float(nh.std()), float(nm.std()), thr
+
+
+# ==================================================================== Figure 4
+def figure4(e1, e3n):
+    """The probe discriminates: same instrument, one benchmark fails, the other passes."""
+    def auc(m, nz):
+        return _retention_from_losses(m, nz)[1]
+    f, h, r = e1["forget"], e1["holdout"], e1["retain"]
+    mf, mh, mr = e3n["forget"], e3n["holdout"], e3n["retain"]
+
+    # p-values are the ones already reported in the paper; nothing is recomputed for display.
+    rows = [
+        ("TOFU  forget10 vs holdout10", 400, auc(f, h), "p < 1e-15", True),
+        ("TOFU  same, at n = 100", 100, auc(f[:100], h[:100]), "p = 4.8e-07", True),
+        ("TOFU  forget10 vs retain90  (control)", 400, auc(f, r), "n.s.", False),
+        ("MUSE-News  forget vs holdout", 100, auc(mf, mh), "p = 0.59", False),
+        ("MUSE-News  forget vs retain  (control)", 100, auc(mf, mr), "p = 0.98", False),
+        ("MUSE-News  retain vs holdout  (control)", 100, auc(mr, mh), "p = 0.59", False),
+    ]
+    fig, ax = plt.subplots(figsize=(5.6, 2.9))
+    ys = np.arange(len(rows))[::-1]
+    for y, (label, n, a, p, fails) in zip(ys, rows):
+        c = S2 if fails else S1
+        ax.plot([0.5, a], [y, y], color=c, lw=1.6, alpha=0.55, solid_capstyle="round")
+        ax.plot([a], [y], marker="s" if fails else "o", ms=7.5, color=c,
+                markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
+        # value above the marker: horizontal placement collided with the row labels on the
+        # left and with the connector line on the right.
+        ax.text(a, y + 0.20, f"{a:.3f}", ha="center", va="bottom", fontsize=7.4, color=INK)
+        ax.text(0.715, y, f"n = {n}    {p}", ha="right", va="center", fontsize=7.0, color=INK_2)
+    ax.axvline(0.5, color=AXIS, lw=1.0)
+    ax.text(0.5, len(rows) - 0.30, "chance (exchangeable reference)", ha="center",
+            va="bottom", fontsize=7.0, color=MUTED)
+    ax.set_yticks(ys)
+    ax.set_yticklabels([r[0] for r in rows], fontsize=7.6, color=INK_2)
+    ax.set_xlabel("difficulty-probe AUC under a never-trained model")
+    ax.set_xlim(0.26, 0.72)
+    ax.set_xticks([0.3, 0.4, 0.5, 0.6, 0.7])
+    ax.set_ylim(-0.6, len(rows) + 0.15)
+    ax.xaxis.grid(True)
+    ax.set_axisbelow(True)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+    save(fig, "fig4_benchmark_comparison")
+    plt.close(fig)
+    return [r[2] for r in rows]
+
+
+# ==================================================================== Figure 5
+def figure5(e1, e2, e2b):
+    """Which MIA family inherits the offset: raw-score collapses, reference-normalised holds."""
+    A, RH, RM, RD = ladder(e1, e2, e2b)
+    thr = Calibrator(target_far=0.05).calibrate(0.0, e2["null_match"]).threshold
+
+    fig, ax = plt.subplots(figsize=(5.2, 2.9))
+    for Y, c, ls, mk, lab in [
+            (RD, S3, ":", "^", "reference-normalised  (Reference)"),
+            (RM, S1, "-", "o", "raw score vs difficulty-matched reference"),
+            (RH, S2, "--", "s", "raw score vs holdout10  (LOSS/ZLib/Min-K/Min-K++)")]:
+        ax.plot(A, Y, color=c, ls=ls, lw=1.9, marker=mk, ms=4.2,
+                markeredgecolor=SURFACE, markeredgewidth=1.1, label=lab)
+    ax.axhline(thr, color=MUTED, lw=1.0, ls=(0, (5, 3)))
+    ax.text(0.995, thr + 0.025, f"matched threshold {thr:.3f}", fontsize=7.0, color=INK_2,
+            ha="right")
+
+    # the alpha = 0.7 receipt quoted in the text
+    i = int(np.where(A == 0.7)[0][0])
+    ax.axvline(0.7, color=MUTED, lw=0.8, ls=(0, (1, 2.5)))
+    for Y, c in [(RD, S3), (RM, S1), (RH, S2)]:
+        ax.plot([0.7], [Y[i]], marker="o", ms=8.5, color=c, markeredgecolor=SURFACE,
+                markeredgewidth=1.7, zorder=4)
+    ax.annotate(f"$\\alpha$=0.7:  {RD[i]:.3f}  /  {RM[i]:.3f}  /  {RH[i]:.3f}",
+                xy=(0.7, RH[i]), xytext=(0.66, 0.30), ha="right", fontsize=7.4, color=INK,
+                arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.7))
+    ax.set_xlabel(r"interpolation coefficient $\alpha$   (synthetic retention gradient —"
+                  " NOT an unlearning method)")
+    ax.set_ylabel("residual-retention score")
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_ylim(-0.03, 1.06)
+    ax.yaxis.grid(True)
+    ax.set_axisbelow(True)
+    ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.10), labelcolor=INK_2,
+          handlelength=2.2, fontsize=7.4)
+    save(fig, "fig5_mia_family")
+    plt.close(fig)
+    return A, RH, RM, RD
+
+
 def main() -> int:
     e1 = np.load(RESULTS / "exp1_probe_nll.npz")
     e2 = np.load(RESULTS / "exp2_ladder.npz")
     e2b = np.load(RESULTS / "exp2b_fine.npz")
+    e3n = np.load(RESULTS / "exp3_muse_news_nll.npz")
     print("Figure 1 ...")
     a = figure1(e1)
     print(f"  AUCs on plot: {a[0]:.3f} / {a[1]:.3f} / {a[2]:.3f}")
     print("Figure 2 ...")
     xh, xm, thr = figure2(e1, e2, e2b)
     print(f"  band {xh:.3f}-{xm:.3f}, matched threshold {thr:.4f}")
+    print("Figure 3 ...")
+    sh, sm, t3 = figure3(e2)
+    print(f"  null sd holdout {sh:.4f} vs matched {sm:.4f}, threshold {t3:.4f}")
+    print("Figure 4 ...")
+    aucs = figure4(e1, e3n)
+    print("  AUCs: " + " / ".join(f"{x:.3f}" for x in aucs))
+    print("Figure 5 ...")
+    A, RH, RM, RD = figure5(e1, e2, e2b)
+    i = int(np.where(A == 0.7)[0][0])
+    print(f"  a=0.7 receipt  holdout {RH[i]:.3f} / matched {RM[i]:.3f} / reference {RD[i]:.3f}")
     return 0
 
 

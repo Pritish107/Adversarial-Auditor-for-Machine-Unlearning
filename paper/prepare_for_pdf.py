@@ -8,15 +8,17 @@ depositing something different from what was reviewed.
 Transforms:
   1. Drop the internal "DRAFT - v0" scaffolding block.
   2. Substitute the real author / affiliation / contact.
-  3. Unwrap the four inline verification flags: keep the substance as plain parentheses,
-     drop the "verified live / RE-CHECK" meta-clauses. These are exact-string replacements,
-     not regexes, so nothing unintended can be rewritten.
-  4. Renumber the Table captions into reading order (they appear 1, 4, 3, 2 in the draft).
-     They are prose-summary notes rather than tabular floats, so they stay as blockquotes;
-     the one prose cross-reference ("Table 1 reports the probe") keeps pointing at Table 1.
-  5. Replace the two figure caption blockquotes with real image includes, so the committed
-     vector PDFs are embedded at their referenced positions with the caption below.
-  6. Drop the internal VERIFY-BEFORE-SUBMIT checklist section (Reproducibility is kept).
+  3. Unwrap the inline verification flags: keep the substance as plain parentheses, drop the
+     "verified live / RE-CHECK" meta-clauses. Exact-string replacements, not regexes, so
+     nothing unintended can be rewritten.
+  4. Drop the internal VERIFY-BEFORE-SUBMIT checklist section (Reproducibility is kept).
+
+Tables and figures need NO transform here: the draft writes real markdown tables with a
+native pandoc caption (a paragraph starting with ":" immediately after the table), so pandoc
+emits genuine \\caption{} floats that LaTeX numbers automatically in reading order -- the
+prose cross-references ("Table 1 reports the probe", "Table 3 gives the full ladder") are
+plain text that happens to match, not something this script maintains. Figures are real
+markdown image includes (`![caption](figures/....pdf)`) already in the draft.
 """
 from __future__ import annotations
 
@@ -55,51 +57,23 @@ def main() -> int:
     t = sub(t, "**Authors:** [you] · **Affiliation:** [placeholder] · **Contact:** [placeholder]",
             authors, "author line")
 
-    # 3 --- unwrap the inline verification flags (substance kept, meta-clause dropped)
+    # 3 --- unwrap the inline verification flags (substance kept, meta-clause dropped).
+    # Figures and tables now live in the draft as real markdown, so they need no transform.
     t = sub(t,
             "⟨TOFU_MIA.yaml → TOFU_QA_holdout → locuslab/TOFU config holdout10; added 2025-03-27 —\n"
             "verified live from HF earlier, RE-CHECK at submission time⟩",
             "(TOFU_MIA.yaml → TOFU_QA_holdout → locuslab/TOFU config holdout10; added 2025-03-27)",
             "flag 1: provenance")
     t = sub(t,
-            "⟨341/341 state-dict tensors aligned\n"
-            "> — runtime assertion in exp2, not stored in the arrays; RE-CHECK on rerun⟩",
-            "341/341 state-dict tensors aligned",
-            "flag 2: tensor count")
-    t = sub(t,
             "⟨identical safetensors weights, differing\n"
             "only in fp32 vs bf16 encoding — verified live from HF earlier, RE-CHECK at submission time⟩",
             "(identical safetensors weights, differing\nonly in fp32 vs bf16 encoding)",
-            "flag 3: duplicate checkpoint")
+            "flag 2: duplicate checkpoint")
     t = sub(t,
             " ⟨verified live from HF earlier, RE-CHECK at submission\ntime⟩",
-            "", "flag 4: empty repos")
+            "", "flag 3: empty repos")
 
-    # 4 --- tables into reading order: draft has 1 (S3), 4 (S3.1), 3 (S4.1), 2 (S4.3)
-    t = sub(t, "> **Table 4.** Probe on both benchmarks", "> **Table 2.** Probe on both benchmarks",
-            "table renumber 4->2")
-    t = sub(t, "> **Table 2.** MIA-family map", "> **Table 4.** MIA-family map",
-            "table renumber 2->4")
-
-    # 5 --- real figure includes; strip the "**Figure N.**" prefix so LaTeX numbers them once
-    t = sub(t,
-            "> **Figure 1.** NLL distributions for forget10, holdout10, and retain90 under the never-trained\n"
-            "> model. The holdout distribution is visibly shifted toward lower NLL (easier).\n"
-            "> *[`paper/figures/fig1_difficulty_distributions.pdf`]*",
-            "![NLL distributions for forget10, holdout10, and retain90 under the never-trained "
-            "model. The holdout distribution is visibly shifted toward lower NLL (easier).]"
-            "(figures/fig1_difficulty_distributions.pdf){width=68%}",
-            "figure 1 include")
-    t = sub(t,
-            "> **Figure 2.** Residual-retention score vs α, under holdout10 (field default) and the\n"
-            "> difficulty-matched reference, with decision thresholds and the missed-detection band shaded.\n"
-            "> *[`paper/figures/fig2_missed_detection.pdf`]*",
-            "![Residual-retention score vs α, under holdout10 (field default) and the "
-            "difficulty-matched reference, with decision thresholds and the missed-detection "
-            "band shaded.](figures/fig2_missed_detection.pdf){width=100%}",
-            "figure 2 include")
-
-    # 6 --- drop the internal checklist section
+    # 4 --- drop the internal checklist section
     cut = t.index("## VERIFY-BEFORE-SUBMIT checklist")
     t = t[:cut].rstrip()
     if t.endswith("---"):
@@ -116,8 +90,12 @@ def main() -> int:
     OUT.write_text(t, encoding="utf-8")
     print(f"wrote {OUT}  ({len(t):,} chars)")
     print("  figures included:", t.count("](figures/"))
-    print("  table captions:  ", sum(f"**Table {i}.**" in t for i in (1, 2, 3, 4)), "of 4, in order",
-          [i for i in (1, 2, 3, 4) if f"**Table {i}.**" in t])
+    # Tables use pandoc's native ": caption" syntax (a paragraph starting with ":" right
+    # after the table), so LaTeX assigns real, auto-numbered \caption{} floats instead of
+    # bold prose standing in for one -- this is what fixed the missing-"T" text-layer bug.
+    import re
+    n_tables = len(re.findall(r"(?m)^\| .+ \|\n\|[-:| ]+\|\n(?:\| .+ \|\n)+\n:\s", t))
+    print(f"  table captions (native pandoc syntax): {n_tables}")
     return 0
 
 
