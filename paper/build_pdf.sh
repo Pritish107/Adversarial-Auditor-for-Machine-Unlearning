@@ -37,10 +37,11 @@ pandoc build/paper_body.md \
   --to=latex \
   --output=build/paper.tex \
   --include-in-header=preamble.tex \
+  --top-level-division=section \
   --variable=documentclass:article \
   --variable=papersize:a4 \
   --variable=fontsize:11pt \
-  --variable=geometry:"margin=0.95in" \
+  --variable=geometry:"margin=1in" \
   --variable=linkcolor:black \
   --variable=urlcolor:black \
   --variable=colorlinks:true \

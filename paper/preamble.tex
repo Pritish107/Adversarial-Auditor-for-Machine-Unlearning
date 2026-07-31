@@ -1,5 +1,12 @@
 % Deposit PDF preamble. Layout only -- no content, no numbers.
 
+% Title/author come from pandoc YAML metadata now (see prepare_for_pdf.py), which triggers
+% the default template's \title{}/\author{}/\maketitle and \begin{abstract} environment --
+% real article.cls title-block and abstract typesetting, not body headings styled to look
+% like one. \date{} is forced empty here (not via metadata) so it is set unconditionally in
+% the preamble regardless of how pandoc's own $if(date)$ conditional treats an empty string.
+\date{}
+
 % Figures sized to the text block, captions below (pandoc emits \caption after \includegraphics).
 % paper.tex is built inside build/, so figure paths resolve one level up.
 \usepackage{graphicx}
@@ -35,11 +42,30 @@
 \newunicodechar{×}{\ensuremath{\times}}
 \newunicodechar{⟨}{\ensuremath{\langle}}
 \newunicodechar{⟩}{\ensuremath{\rangle}}
+% U+2011 NON-BREAKING HYPHEN: same visible glyph as a regular hyphen, used once (the
+% "2025-03-27" provenance date) so it cannot wrap mid-token at a line end. \mbox{} makes it an
+% unbreakable box rather than relying on the font shipping a distinct non-breaking-hyphen
+% glyph, which is not guaranteed.
+\newunicodechar{‑}{\mbox{-}}
 
 % Slightly roomier line spacing for on-screen reading of a preprint.
 \usepackage{setspace}
 \setstretch{1.0}
 
 % Keep floats near their reference; a preprint reads badly with figures pushed to the end.
+% [subsection] auto-inserts a barrier at every \subsection. Section 6 alone has three
+% subsections (6.1/6.2/6.3), each with its own figure -- a [section]-level barrier let all
+% three drift together and flush as one group at the end of the section, piling fig3+fig2+
+% fig5 onto a single page and overflowing it by ~3 inches (diagnosed from the TeX transcript:
+% all three "<use ...>" lines land on the same page right before the Overfull \vbox). The
+% finer subsection barrier flushes each figure near its own reference instead.
 \usepackage{float}
-\usepackage{placeins}
+\usepackage[subsection]{placeins}
+
+% Standard float-placement loosening for a float-dense document: base LaTeX's defaults
+% (topfraction 0.7, floatpagefraction 0.5, etc.) are tuned for the rare-float case and force
+% more deferral than this paper's float density can absorb cleanly.
+\renewcommand{\topfraction}{0.90}
+\renewcommand{\bottomfraction}{0.80}
+\renewcommand{\textfraction}{0.10}
+\renewcommand{\floatpagefraction}{0.75}
