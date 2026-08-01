@@ -529,7 +529,7 @@ no quantile exists to threshold at — the auditor cannot be calibrated, at any 
 
 ### 6.2 The offset causes missed detections (C3)
 
-Figure 2 plots residual-retention score against α under both references, with decision
+Figure 4 plots residual-retention score against α under both references, with decision
 thresholds. The flip is **directly observed at the sampled rungs α ∈ {0.80, 0.85, 0.90}**;
 taking linear crossings between rungs, the **missed-detection band spans α ≈ 0.77–0.94** (the
 holdout-based auditor stops detecting at α ≈ 0.77, the difficulty-matched auditor at

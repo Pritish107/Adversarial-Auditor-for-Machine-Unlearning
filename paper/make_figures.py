@@ -343,26 +343,31 @@ def figure4(e1, e3n):
         ("MUSE-News  forget vs retain  (control)", 100, auc(mf, mr), "p = 0.98", False),
         ("MUSE-News  retain vs holdout  (control)", 100, auc(mr, mh), "p = 0.59", False),
     ]
-    fig, ax = plt.subplots(figsize=(5.6, 2.9))
-    ys = np.arange(len(rows))[::-1]
+    # Row pitch widened from the default 1.0 to 1.35: the value label above each marker and
+    # the n/p annotation beside it need more vertical clearance from the neighbouring rows
+    # than a unit pitch gives at this figure's print size, per a decisive spacing pass.
+    ROW = 1.35
+    fig, ax = plt.subplots(figsize=(5.8, 3.7))
+    ys = np.arange(len(rows))[::-1] * ROW
     for y, (label, n, a, p, fails) in zip(ys, rows):
         c = S2 if fails else S1
         ax.plot([0.5, a], [y, y], color=c, lw=1.6, alpha=0.55, solid_capstyle="round")
         ax.plot([a], [y], marker="s" if fails else "o", ms=7.5, color=c,
                 markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
-        # value above the marker: horizontal placement collided with the row labels on the
-        # left and with the connector line on the right.
-        ax.text(a, y + 0.20, f"{a:.3f}", ha="center", va="bottom", fontsize=7.4, color=INK)
-        ax.text(0.715, y, f"n = {n}    {p}", ha="right", va="center", fontsize=7.0, color=INK_2)
+        # value clearly above the marker (0.34 of the row pitch, vs. the marker's own ~0.07
+        # radius) and the n/p annotation held far right, in its own column -- the two never
+        # share a horizontal band with each other or with the row above/below.
+        ax.text(a, y + 0.34, f"{a:.3f}", ha="center", va="bottom", fontsize=7.4, color=INK)
+        ax.text(0.735, y, f"n = {n}    {p}", ha="right", va="center", fontsize=7.0, color=INK_2)
     ax.axvline(0.5, color=AXIS, lw=1.0)
-    ax.text(0.5, len(rows) - 0.30, "chance (exchangeable reference)", ha="center",
+    ax.text(0.5, ys[0] + 0.55, "chance (exchangeable reference)", ha="center",
             va="bottom", fontsize=7.0, color=MUTED)
     ax.set_yticks(ys)
     ax.set_yticklabels([r[0] for r in rows], fontsize=7.6, color=INK_2)
     ax.set_xlabel("difficulty-probe AUC under a never-trained model")
-    ax.set_xlim(0.26, 0.72)
+    ax.set_xlim(0.26, 0.74)
     ax.set_xticks([0.3, 0.4, 0.5, 0.6, 0.7])
-    ax.set_ylim(-0.6, len(rows) + 0.15)
+    ax.set_ylim(ys[-1] - 0.75, ys[0] + 1.05)
     ax.xaxis.grid(True)
     ax.set_axisbelow(True)
     ax.spines["left"].set_visible(False)
@@ -376,22 +381,25 @@ def figure4(e1, e3n):
 def figure5(e1, e2, e2b):
     """Which MIA family inherits the offset: raw-score collapses, reference-normalised holds.
 
-    Anti-collision layout (same discipline as fig2's verdict strip): the legend is moved
-    fully OUTSIDE the axes (three long labels cannot share in-plot space with three
-    criss-crossing curves without touching one of them), the combined "alpha=0.7: a/b/c"
-    string is split into three independent labels -- one per point, placed directly ABOVE
-    its own marker where the curve geometry is verified clear -- and the threshold label
-    moves to the left edge, where all three curves are still bunched near 1.0 and the region
-    under them is empty.
+    STRATEGY CHANGE (a prior inline-label version still collided in practice, even after
+    per-point placement and offset tuning -- see PLAN.md/commit history): rather than trying
+    to find in-plot whitespace for three numbers next to three criss-crossing curves, NO
+    numeric value is drawn inside the plot body at all. The alpha=0.7 receipt (0.970/0.541/
+    0.162) is carried entirely by the legend text -- which is already fully outside the axes
+    -- so there is no plot-body text to collide with a line, a marker, or another label. The
+    plot itself keeps only the enlarged markers and the vertical guide line at alpha=0.7 as a
+    silent "look here" cue; zero characters are drawn near the data.
     """
     A, RH, RM, RD = ladder(e1, e2, e2b)
     thr = Calibrator(target_far=0.05).calibrate(0.0, e2["null_match"]).threshold
+    i = int(np.where(A == 0.7)[0][0])
 
     fig, ax = plt.subplots(figsize=(5.6, 2.85))
     for Y, c, ls, mk, lab in [
-            (RD, S3, ":", "^", "reference-normalised  (Reference)"),
-            (RM, S1, "-", "o", "raw score vs difficulty-matched reference"),
-            (RH, S2, "--", "s", "raw score vs holdout10  (LOSS/ZLib/Min-K/Min-K++)")]:
+            (RD, S3, ":", "^", f"reference-normalised (Reference)   [α=0.7: {RD[i]:.3f}]"),
+            (RM, S1, "-", "o", f"raw score vs difficulty-matched reference   [α=0.7: {RM[i]:.3f}]"),
+            (RH, S2, "--", "s", "raw score vs holdout10 (LOSS/ZLib/Min-K/Min-K++)   "
+                              f"[α=0.7: {RH[i]:.3f}]")]:
         ax.plot(A, Y, color=c, ls=ls, lw=1.9, marker=mk, ms=4.2,
                 markeredgecolor=SURFACE, markeredgewidth=1.1, label=lab)
 
@@ -402,36 +410,25 @@ def figure5(e1, e2, e2b):
     ax.text(0.03, thr + 0.028, f"matched threshold {thr:.3f}", fontsize=7.0, color=INK_2,
             ha="left")
 
-    # alpha = 0.7 receipt: three SEPARATE labels, each directly above its own marker. The
-    # three curves are ~0.4 apart in y at this x, so "directly above" lands in the gap to
-    # the next curve up, not on top of it -- verified against the actual y-values below.
-    i = int(np.where(A == 0.7)[0][0])
+    # alpha = 0.7 receipt: markers + a guide line only. No text is drawn at this x at all --
+    # the values live exclusively in the legend labels above.
     ax.axvline(0.7, color=MUTED, lw=0.8, ls=(0, (1, 2.5)))
     for Y, c in [(RD, S3), (RM, S1), (RH, S2)]:
         ax.plot([0.7], [Y[i]], marker="o", ms=8.5, color=c, markeredgecolor=SURFACE,
                 markeredgewidth=1.7, zorder=4)
-    ax.text(0.7, RD[i] + 0.052, rf"$\alpha$=0.7: {RD[i]:.3f}", ha="center", va="bottom",
-            fontsize=7.2, color=INK)
-    ax.text(0.7, RM[i] + 0.05, f"{RM[i]:.3f}", ha="center", va="bottom",
-            fontsize=7.2, color=INK)
-    ax.text(0.7, RH[i] + 0.05, f"{RH[i]:.3f}", ha="center", va="bottom",
-            fontsize=7.2, color=INK)
 
     ax.set_xlabel(r"interpolation coefficient $\alpha$   (synthetic retention gradient —"
                   " NOT an unlearning method)")
     ax.set_ylabel("residual-retention score")
     ax.set_xlim(-0.02, 1.02)
-    ax.set_ylim(-0.03, 1.08)
+    ax.set_ylim(-0.03, 1.03)          # tighter now that no label needs headroom near the top
     ax.yaxis.grid(True)
     ax.set_axisbelow(True)
 
-    # Legend fully outside the axes -- three long labels cannot be shoehorned into any
-    # in-plot gap between three criss-crossing curves without touching one of them. Kept
-    # compact (tight labelspacing, no extra borderaxespad) since this figure's total height
-    # -- plot plus external legend -- has to fit on one page alongside its own subsection
-    # heading and lead-in paragraph.
+    # Legend fully outside the axes, one entry per line, each carrying its own alpha=0.7
+    # value in brackets -- this is where every number in this figure now lives.
     fig.legend(loc="upper center", bbox_to_anchor=(0.5, -0.06), ncol=1, frameon=False,
-              labelcolor=INK_2, handlelength=2.0, fontsize=7.2, labelspacing=0.35,
+              labelcolor=INK_2, handlelength=2.0, fontsize=7.2, labelspacing=0.6,
               borderaxespad=0.2)
 
     save(fig, "fig5_mia_family")
